@@ -1,0 +1,502 @@
+"""Pydantic schemas for Fantasy Football Isle of Man API."""
+from pydantic import BaseModel, Field, field_validator
+from typing import List, Optional, Dict, Any
+from datetime import datetime, date
+import re
+
+
+# User schemas
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=100)
+    email: str = Field(..., max_length=200)
+    password: str = Field(..., min_length=10, max_length=128)
+    team_name: Optional[str] = None
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """H8: Enforce password complexity requirements."""
+        if len(v) < 10:
+            raise ValueError("Password must be at least 10 characters")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain a lowercase letter")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain an uppercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain a digit")
+        return v
+
+
+class LoginRequest(BaseModel):
+    username: str = Field(..., description="Username or email")
+    password: str = ...
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str = ...
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    email_verified: bool = False
+    display_name: Optional[str] = None
+    profile_picture_url: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+# Account management schemas
+class UpdateProfileRequest(BaseModel):
+    display_name: Optional[str] = Field(None, max_length=100)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=10, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if len(v) < 10:
+            raise ValueError("Password must be at least 10 characters")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain a lowercase letter")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain an uppercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain a digit")
+        return v
+
+
+class LinkEmailPasswordRequest(BaseModel):
+    password: str = Field(..., min_length=10, max_length=128)
+
+    @field_validator("password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if len(v) < 10:
+            raise ValueError("Password must be at least 10 characters")
+        if not re.search(r"[a-z]", v):
+            raise ValueError("Password must contain a lowercase letter")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain an uppercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain a digit")
+        return v
+
+
+class LinkedIdentityResponse(BaseModel):
+    id: int
+    provider: str
+    provider_id: str
+    provider_email: Optional[str] = None
+    is_primary: bool = True
+    created_at: Optional[datetime] = None
+
+
+class AccountResponse(BaseModel):
+    user: UserResponse
+    identities: List[LinkedIdentityResponse]
+
+
+class EmailVerificationRequest(BaseModel):
+    pass
+
+
+# Player schemas
+class PlayerResponse(BaseModel):
+    id: int
+    name: str
+    team_id: int
+    price: float
+    price_start: float = 5.0
+    price_change: int = 0
+    apps: int = 0
+    goals: int = 0
+    assists: int = 0
+    clean_sheets: int = 0
+    total_points: int = 0
+    total_points_season: int = 0
+    gw_points: Optional[int] = None
+    selected_by_percent: float = 0.0
+    form: float = 0.0
+    ict_index: float = 0.0
+    is_injured: bool = False
+    injury_status: Optional[str] = None
+    transfers_in: int = 0
+    transfers_out: int = 0
+    team: Optional[Dict[str, Any]] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PlayerDetailResponse(BaseModel):
+    id: int
+    name: str
+    web_name: Optional[str] = None
+    team_id: int
+    price: float
+    price_start: float = 5.0
+    price_change: int = 0
+    price_change_total: int = 0
+    selected_by_percent: float = 0.0
+    form: float = 0.0
+    ict_index: float = 0.0
+    apps: int = 0
+    goals: int = 0
+    assists: int = 0
+    clean_sheets: int = 0
+    yellow_cards: int = 0
+    red_cards: int = 0
+    saves: int = 0
+    minutes_played: int = 0
+    bonus: int = 0
+    total_points: int = 0
+    influence: float = 0.0
+    creativity: float = 0.0
+    threat: float = 0.0
+    transfers_in: int = 0
+    transfers_out: int = 0
+    team_name: str = ""
+    division: str = ""
+    is_injured: bool = False
+    injury_status: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PlayerHistoryEntry(BaseModel):
+    gameweek: int
+    points: int
+    opponent: str = ""
+    was_home: bool = False
+    goals_scored: int = 0
+    assists: int = 0
+    bonus: int = 0
+    minutes: int = 0
+
+
+# Team schemas
+class TeamResponse(BaseModel):
+    id: int
+    name: str
+    short_name: Optional[str] = None
+    division_id: Optional[int] = None
+    current_position: Optional[int] = None
+    current_points: int = 0
+    games_played: int = 0
+    games_won: int = 0
+    games_drawn: int = 0
+    games_lost: int = 0
+    goals_for: int = 0
+    goals_against: int = 0
+    goal_difference: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class DivisionResponse(BaseModel):
+    id: int
+    name: str
+    teams: List[TeamResponse] = []
+
+
+# Squad schemas
+class SquadPlayerResponse(BaseModel):
+    id: int
+    player_id: int
+    player: Any  # PlayerResponse
+    position_slot: int
+    is_captain: bool = False
+    is_vice_captain: bool = False
+    is_starting: bool = True
+    total_points: int = 0
+    gw_points: int = 0
+    was_autosub: bool = False
+    bench_priority: int = 99
+    purchase_price: float = 0.0
+
+    class Config:
+        from_attributes = True
+
+
+class ChipStatus(BaseModel):
+    """FPL 2025/26: All chips available 2x per season (1 per half)."""
+    wildcard_first_half_used: bool = False
+    wildcard_second_half_used: bool = False
+    wildcard_first_half_available: bool = True
+    wildcard_second_half_available: bool = True
+    free_hit_first_half_used: bool = False
+    free_hit_second_half_used: bool = False
+    free_hit_first_half_available: bool = True
+    free_hit_second_half_available: bool = True
+    bench_boost_first_half_used: bool = False
+    bench_boost_second_half_used: bool = False
+    bench_boost_first_half_available: bool = True
+    bench_boost_second_half_available: bool = True
+    triple_captain_first_half_used: bool = False
+    triple_captain_second_half_used: bool = False
+    triple_captain_first_half_available: bool = True
+    triple_captain_second_half_available: bool = True
+    active_chip: Optional[str] = None
+    current_half: str = "first"
+
+
+class FantasyTeamResponse(BaseModel):
+    id: int
+    name: str
+    total_points: int = 0
+    overall_rank: Optional[int] = None
+    free_transfers: int = 1
+    free_transfers_next_gw: int = 1
+    budget_remaining: float = 90.0
+    chip_status: ChipStatus
+    squad: List[SquadPlayerResponse] = []
+    current_gw_transfers: int = 0
+    transfer_deadline_exceeded: bool = False
+    season: str = ""
+
+
+# Transfer schemas
+class TransferRequest(BaseModel):
+    player_in_id: int
+    player_out_id: int
+    use_wildcard: bool = False
+
+
+class TransferResponse(BaseModel):
+    status: str
+    player_in: dict
+    player_out: dict
+    points_hit: int = 0
+    budget_remaining: float
+    free_transfers: int
+    is_wildcard: bool = False
+
+
+# Captain/Chip schemas
+class CaptainRequest(BaseModel):
+    captain_id: int  # SquadPlayer ID
+    vice_captain_id: Optional[int] = None
+
+
+class ChipRequest(BaseModel):
+    chip: str  # wildcard, free_hit, bench_boost, triple_captain
+    cancel: bool = False  # If True, cancel the chip instead of activating
+
+
+# Gameweek schemas
+class FixtureResponse(BaseModel):
+    id: int
+    gameweek: int
+    date: datetime
+    home_team: str
+    away_team: str
+    home_score: Optional[int] = None
+    away_score: Optional[int] = None
+    played: bool = False
+    home_difficulty: int = 3
+    away_difficulty: int = 3
+
+
+class GameweekResponse(BaseModel):
+    id: int
+    number: int
+    season: str
+    start_date: date
+    end_date: Optional[date] = None
+    deadline: datetime
+    closed: bool = False
+    scored: bool = False
+    fixtures: List[FixtureResponse] = []
+
+
+# Leaderboard schemas
+class LeaderboardEntry(BaseModel):
+    rank: int
+    user_id: int
+    username: str
+    team_name: str
+    total_points: int
+    gameweek_points: Optional[int] = None
+    overall_rank: Optional[int] = None
+
+
+class LeaderboardResponse(BaseModel):
+    season: str
+    total_teams: int
+    entries: List[LeaderboardEntry] = []
+
+
+# Mini-league schemas
+class MiniLeagueCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=200)
+    is_h2h: bool = False
+
+
+class MiniLeagueJoin(BaseModel):
+    code: str = Field(..., min_length=5, max_length=10)
+
+
+class MiniLeagueResponse(BaseModel):
+    id: int
+    name: str
+    code: str
+    season: str
+    is_h2h: bool = False
+    members: List[LeaderboardEntry] = []
+    total_members: int = 0
+
+
+class MiniLeagueMemberResponse(BaseModel):
+    fantasy_team_id: int
+    username: str
+    team_name: str
+    total_points: int
+    rank: Optional[int] = None
+
+
+# H2H schemas
+class H2hLeagueCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=200)
+    format_type: str = Field(default="round_robin", description="round_robin or knockout")
+
+
+class H2hMatchResponse(BaseModel):
+    id: int
+    gameweek: int
+    participant_a: dict
+    participant_b: dict
+    status: str
+    result: Optional[str] = None
+
+
+# Season schemas
+class SeasonResponse(BaseModel):
+    id: int
+    name: str
+    total_gameweeks: int
+    first_half_cutoff: int = 19
+    second_half_cutoff: int = 20
+    started: bool = False
+    finished: bool = False
+
+
+# Gameweek recap schemas
+class TopScorerEntry(BaseModel):
+    player_id: int
+    player_name: str
+    team: str
+    points: int
+    goals: int = 0
+    assists: int = 0
+    clean_sheets: int = 0
+    saves: int = 0
+    bonus: int = 0
+    was_captain: bool = False
+    minutes: int = 0
+
+
+class CaptainLeaderEntry(BaseModel):
+    player_id: int
+    player_name: str
+    team: str
+    points: int
+
+
+class OwnershipEntry(BaseModel):
+    player_id: int
+    player_name: str
+    team: str
+    ownership_count: int = 0
+    ownership_pct: float = 0.0
+
+
+class PriceChangeEntry(BaseModel):
+    player_id: int
+    player_name: str
+    team: str
+    old_price: float = 0.0
+    new_price: float = 0.0
+    change: float = 0.0
+
+
+class H2HResultEntry(BaseModel):
+    match_id: int = 0
+    team1: str = ""
+    team1_points: int = 0
+    team2: str = ""
+    team2_points: int = 0
+    winner: str = "draw"
+
+
+class ChipUsedEntry(BaseModel):
+    team: str = ""
+    chip_type: str = ""
+    gameweek_id: int = 0
+
+
+class LeaderboardEntryRecap(BaseModel):
+    team_name: str = ""
+    owner: str = ""
+    points: int = 0
+
+
+class GameweekRecapResponse(BaseModel):
+    gameweek_id: int
+    gameweek_name: str = ""
+    status: str = ""
+    top_scorers: List[TopScorerEntry] = []
+    captain_leaders: List[CaptainLeaderEntry] = []
+    average_points: float = 0.0
+    most_owned: List[OwnershipEntry] = []
+    price_changes: List[PriceChangeEntry] = []
+    h2h_results: List[H2HResultEntry] = []
+    chips_used: List[ChipUsedEntry] = []
+    leaderboard: List[LeaderboardEntryRecap] = []
+
+
+# Player comparison schemas
+class PlayerComparisonResponse(BaseModel):
+    player_id: int
+    player_name: str
+    team: str
+    price: float
+    total_points: int = 0
+    goals: int = 0
+    assists: int = 0
+    games_played: int = 0
+    form: float = 0.0
+    recent_points: List[int] = []
+    ownership_pct: float = 0.0
+    price_history: List[dict] = []
+
+
+# Player price schemas
+class PlayerPriceResponse(BaseModel):
+    player_id: int
+    player_name: str
+    old_price: float
+    new_price: float
+    change: float
+    team: str
+    gameweek_id: int
+    timestamp: datetime
+
+
+class PriceChangeSummary(BaseModel):
+    changes_made: int = 0
+    gameweek_id: Optional[int] = None

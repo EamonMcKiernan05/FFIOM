@@ -1,0 +1,3 @@
+#!/bin/sh
+cd /opt/fulltime
+exec /command/s6-envdir /run/s6/container_environment /command/s6-setuidgid ffiom /usr/share/dotnet/dotnet FullTimeAPI.dll --urls http://127.0.0.1:5000

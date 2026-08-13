@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en" class="light-theme">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help | Fantasy Football Isle of Man</title>
+    <link rel="icon" href="/static/img/clubs/PremierLeagueIOM.png">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&display=swap">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=20260805">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260805">
+    <script>
+        (function () {
+            var t = localStorage.getItem('theme');
+            if (!t || t === 'null') {
+                t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark-theme' : 'light-theme';
+            }
+            document.documentElement.classList.remove('light-theme', 'dark-theme');
+            document.documentElement.classList.add(t);
+        })();
+    </script>
+</head>
+<body data-page="help">
+    <nav class="game-nav">
+        <div class="game-nav__inner">
+            <a class="game-nav__brand" href="/">
+                <img class="game-nav__logo" src="/static/img/clubs/PremierLeagueIOM.png" alt="Fantasy Football Isle of Man">
+            </a>
+            <button class="nav-toggle" id="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+            <ul class="game-nav__links" id="nav-links">
+                <li><a class="game-nav__link" href="/">Home</a></li>
+                <li><a class="game-nav__link" href="/my-team">My Team</a></li>
+                <li><a class="game-nav__link" href="/transfers">Transfers</a></li>
+                <li><a class="game-nav__link" href="/players">Players</a></li>
+                <li><a class="game-nav__link" href="/fixtures">Fixtures</a></li>
+                <li><a class="game-nav__link" href="/gameweeks">Gameweeks</a></li>
+                <li><a class="game-nav__link" href="/history">History</a></li>
+                <li><a class="game-nav__link" href="/leaderboard">Leaderboard</a></li>
+                <li><a class="game-nav__link" href="/leagues">Leagues</a></li>
+                <li><a class="game-nav__link" href="/dream-team">Dream Team</a></li>
+                <li><a class="game-nav__link" href="/rankings">Rankings</a></li>
+                <li><a class="game-nav__link is-active" href="/help">Help</a></li>
+            </ul>
+            <div class="game-nav__right">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+                    <span class="theme-toggle__sun">&#9728;</span><span class="theme-toggle__moon">&#9790;</span>
+                </button>
+                <div id="nav-auth" style="display:flex;align-items:center;gap:0.8rem"></div>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <div class="container">
+            <div class="page-header">
+                <h1>Help</h1>
+                <p class="lede">How Fantasy Football Isle of Man works.</p>
+            </div>
+            <div class="card">
+                <h2 class="card__title">Squad</h2>
+                <p>Pick a squad of 13 players within the budget. Choose a starting XI each gameweek &mdash; your bench covers no-shows.</p>
+            </div>
+            <div class="card">
+                <h2 class="card__title">Scoring</h2>
+                <div class="table-wrap"><table class="data-table">
+                    <thead><tr><th>Action</th><th class="num">Points</th></tr></thead>
+                    <tbody>
+                        <tr><td>Playing up to 60 mins</td><td class="num">1</td></tr>
+                        <tr><td>Playing 60+ mins</td><td class="num">2</td></tr>
+                        <tr><td>Goal scored</td><td class="num">4</td></tr>
+                        <tr><td>Assist</td><td class="num">3</td></tr>
+                        <tr><td>Clean sheet</td><td class="num">4</td></tr>
+                        <tr><td>Every 3 saves</td><td class="num">1</td></tr>
+                        <tr><td>Penalty save</td><td class="num">5</td></tr>
+                        <tr><td>Every 2 goals conceded</td><td class="num">-1</td></tr>
+                        <tr><td>Yellow card</td><td class="num">-1</td></tr>
+                        <tr><td>Red card</td><td class="num">-3</td></tr>
+                        <tr><td>Own goal</td><td class="num">-2</td></tr>
+                        <tr><td>Penalty missed</td><td class="num">-2</td></tr>
+                    </tbody>
+                </table></div>
+            </div>
+            <div class="card">
+                <h2 class="card__title">Captain &amp; vice-captain</h2>
+                <p>Your captain scores double points. If the captain doesn't play, the vice-captain takes over.</p>
+            </div>
+            <div class="card">
+                <h2 class="card__title">Transfers &amp; chips</h2>
+                <p>You get free transfers each gameweek; extra transfers cost points. Chips (Wildcard, Bench Boost, Triple Captain) can be activated once per season from the My Team page.</p>
+            </div>
+            <div class="card">
+                <h2 class="card__title">Mini-leagues</h2>
+                <p>Create a league on the Leagues page and share the code with friends, or join one with a code.</p>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/app.js?v=20260805"></script>
+    <script src="/static/js/pages.js?v=20260805"></script>
+</body>
+</html>

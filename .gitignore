@@ -1,0 +1,18 @@
+venv/
+__pycache__/
+*.pyc
+*.log
+
+# Secrets - never commit
+.env
+
+# Databases - never commit (they live in host bind mounts)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+data/
+
+# Local-only compose overrides
+compose.override.yaml

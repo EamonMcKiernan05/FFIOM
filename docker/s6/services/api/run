@@ -1,0 +1,4 @@
+#!/bin/sh
+# s6-overlay v3 scrubs PID1 env -> import container env explicitly
+cd /app
+exec /command/s6-envdir /run/s6/container_environment /command/s6-setuidgid ffiom /app/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips "*"

@@ -1,0 +1,15 @@
+.git
+.gitignore
+data/
+.env
+.env.example
+venv/
+__pycache__/
+*.pyc
+*.log
+tests/
+FullTimeAPI/**/bin/
+FullTimeAPI/**/obj/
+*.db
+*.db-shm
+*.db-wal

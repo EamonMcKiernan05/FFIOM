@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en" class="light-theme">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register | Fantasy Football Isle of Man</title>
+    <link rel="icon" href="/static/img/clubs/PremierLeagueIOM.png">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&display=swap">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=20260805">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260805">
+    <script>
+        (function () {
+            var t = localStorage.getItem('theme');
+            if (!t || t === 'null') {
+                t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark-theme' : 'light-theme';
+            }
+            document.documentElement.classList.remove('light-theme', 'dark-theme');
+            document.documentElement.classList.add(t);
+        })();
+    </script>
+</head>
+<body data-page="register">
+    <nav class="game-nav">
+        <div class="game-nav__inner">
+            <a class="game-nav__brand" href="/">
+                <img class="game-nav__logo" src="/static/img/clubs/PremierLeagueIOM.png" alt="Fantasy Football Isle of Man">
+            </a>
+            <button class="nav-toggle" id="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+            <ul class="game-nav__links" id="nav-links">
+                <li><a class="game-nav__link" href="/">Home</a></li>
+                <li><a class="game-nav__link" href="/my-team">My Team</a></li>
+                <li><a class="game-nav__link" href="/transfers">Transfers</a></li>
+                <li><a class="game-nav__link" href="/players">Players</a></li>
+                <li><a class="game-nav__link" href="/fixtures">Fixtures</a></li>
+                <li><a class="game-nav__link" href="/gameweeks">Gameweeks</a></li>
+                <li><a class="game-nav__link" href="/history">History</a></li>
+                <li><a class="game-nav__link" href="/leaderboard">Leaderboard</a></li>
+                <li><a class="game-nav__link" href="/leagues">Leagues</a></li>
+                <li><a class="game-nav__link" href="/dream-team">Dream Team</a></li>
+                <li><a class="game-nav__link" href="/rankings">Rankings</a></li>
+                <li><a class="game-nav__link" href="/help">Help</a></li>
+            </ul>
+            <div class="game-nav__right">
+                <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+                    <span class="theme-toggle__sun">&#9728;</span><span class="theme-toggle__moon">&#9790;</span>
+                </button>
+                <div id="nav-auth" style="display:flex;align-items:center;gap:0.8rem"></div>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <div class="container">
+            <div class="form-card card">
+                <h1 style="margin-bottom:2.4rem">Create your team</h1>
+                <form onsubmit="handleRegister(event)">
+                    <div class="form-field">
+                        <label for="reg-username">Username</label>
+                        <input id="reg-username" type="text" required autocomplete="username">
+                    </div>
+                    <div class="form-field">
+                        <label for="reg-email">Email</label>
+                        <input id="reg-email" type="email" required autocomplete="email">
+                    </div>
+                    <div class="form-field">
+                        <label for="reg-team-name">Team name</label>
+                        <input id="reg-team-name" type="text" required maxlength="40">
+                    </div>
+                    <div class="form-field">
+                        <label for="reg-password">Password</label>
+                        <input id="reg-password" type="password" required minlength="6" autocomplete="new-password">
+                    </div>
+                    <button class="button button--filled button--full-width" type="submit">Register</button>
+                </form>
+                <p class="form-alt">Already registered? <a href="/login">Sign in</a></p>
+            </div>
+        </div>
+    </main>
+
+    <script src="/static/js/app.js?v=20260805"></script>
+    <script src="/static/js/pages.js?v=20260805"></script>
+</body>
+</html>

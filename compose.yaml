@@ -1,0 +1,21 @@
+# FFIOM production compose file.
+# Copy this alongside the built image on the host. Secrets live in .env
+# on the host (never committed); DBs live in host folders mounted below.
+services:
+  ffiom:
+    image: ffiom:latest
+    container_name: ffiom
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - /home/ffiom/.env
+    environment:
+      # In-container DB paths - fixed. Host folders are mapped in via volumes.
+      DATABASE_URL: sqlite:////data/game/fantasy_iom.db
+      FFIOM_DB_PATH: /data/ffiom/fantasy_iom.db
+    volumes:
+      # Host folders holding the two SQLite DBs - survives image rebuilds.
+      # Adjust the left-hand paths per host.
+      - /home/ffiom/data/game:/data/game
+      - /home/ffiom/data/ffiom:/data/ffiom

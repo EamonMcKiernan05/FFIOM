@@ -1,0 +1,107 @@
+﻿using FullTimeAPI.Services.Interfaces;
+using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Annotations;
+
+namespace FullTimeAPI.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class SearchController : ControllerBase
+    {
+        private readonly ISearchService _searchService;
+
+        public SearchController(ISearchService searchService)
+        {
+            _searchService = searchService;
+        }
+
+        /// <summary>
+        /// Searches for clubs by entering name (or part of name) Will return ClubId.
+        /// </summary>
+        /// <param name="clubName">Club name to search for</param>
+        /// <returns>List of matching clubs</returns>
+        /// <remarks>
+        /// Sample Club Name:
+        ///
+        /// Axbridge
+        ///
+        /// </remarks>
+        /// <response code="200">Returns the list of clubs</response>
+        /// <response code="500">If an error occurs</response>
+        [HttpGet("clubs/{clubName}")]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(500)]
+        public async Task<IActionResult> GetClubsByName(string clubName)
+        {
+            var results = await _searchService.FindClubs(clubName);
+            return Ok(results);
+        }
+
+        /// <summary>
+        /// Gets all teams for a specific club by ClubId.
+        /// </summary>
+        /// <param name="clubId">The club ID</param>
+        /// <returns>List of teams within the club</returns>
+        /// <remarks>
+        /// Sample Club Id:
+        ///
+        /// 462688870
+        ///
+        /// </remarks>
+        /// <response code="200">Returns the list of teams</response>
+        /// <response code="500">If an error occurs</response>
+        [HttpGet("teams/{clubId}")]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(500)]
+        public async Task<IActionResult> GetTeamsByClubId(string clubId)
+        {
+            var results = await _searchService.FindTeamsByClub(clubId);
+            return Ok(results);
+        }
+
+        /// <summary>
+        /// Searches for leagues by entering name (or part of name) Will return LeagueId.
+        /// </summary>
+        /// <param name="leagueName">League name to search for</param>
+        /// <returns>List of matching leagues</returns>
+        /// <remarks>
+        /// Sample League Name:
+        ///
+        /// Weston
+        ///
+        /// </remarks>
+        /// <response code="200">Returns the list of leagues</response>
+        /// <response code="500">If an error occurs</response>
+        [HttpGet("leagues/{leagueName}")]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(500)]
+        public async Task<IActionResult> GetLeaguesByName(string leagueName)
+        {
+            var results = await _searchService.FindLeagues(leagueName);
+            return Ok(results);
+        }
+
+
+        /// <summary>
+        /// Searches for divisions by entering id of a league.
+        /// </summary>
+        /// <param name="leagueId">League id</param>
+        /// <returns>List of matching divisions</returns>
+        /// <remarks>
+        /// Sample League Id:
+        ///
+        /// 8928175
+        ///
+        /// </remarks>
+        /// <response code="200">Returns the list of divisions</response>
+        /// <response code="500">If an error occurs</response>
+        [HttpGet("divisions/{leagueId}")]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(500)]
+        public async Task<IActionResult> GetDivisionsByLeagueId(string leagueId)
+        {
+            var results = await _searchService.FindDivisonById(leagueId);
+            return Ok(results);
+        }
+    }
+}

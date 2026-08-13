@@ -1,0 +1,141 @@
+/* FFIOM design tokens — verified against official FPL ism.css v1.48.1
+   1rem = 10px (html font-size 62.5%) — load-bearing, do not change. */
+
+html { font-size: 62.5%; line-height: 1.15; -webkit-text-size-adjust: 100%; }
+
+:root {
+  /* Brand palette (FPL family) */
+  --c-pl-purple: #37003c;
+  --c-pl-purple-rgb: 55, 0, 60;
+  --c-pl-yellow: #ebff00;
+  --c-pl-blue: #05f0ff;
+  --c-pl-lilac: #953bff;
+  --c-pl-green: #00ff87;
+  --c-pl-orange: #ff6900;
+  --c-pl-pink: #ff2882;
+
+  --c-system-error: #e60023;
+  --c-system-success: #34a853;
+
+  /* Purple-tinted monochrome scale (FPL does not use raw greys) */
+  --c-mono-white: #ffffff;
+  --c-mono-p2: #faf9fa;
+  --c-mono-p5: #f5f2f5;
+  --c-mono-p10: #ebe5eb;
+  --c-mono-p20: #d7ccd8;
+  --c-mono-p30: #c3b2c4;
+  --c-mono-p40: #af99b1;
+  --c-mono-p50: #9b809d;
+  --c-mono-p60: #87668a;
+  --c-mono-p70: #7d5980;
+  --c-mono-p80: #541e5d;
+  --c-mono-p90: #41054b;
+  --c-mono-p100: #37003c;
+  --c-mono-p110: #28002b;
+  --c-mono-p120: #1e0021;
+
+  /* FDR — semantics FIXED: easy = bright, hard = dark/saturated */
+  --fpl-fdr-1: #375523; --fpl-fdr-1-on: #fff;
+  --fpl-fdr-2: #01fc7a; --fpl-fdr-2-on: var(--c-pl-purple);
+  --fpl-fdr-3: #e7e7e7; --fpl-fdr-3-on: var(--c-pl-purple);
+  --fpl-fdr-4: #ff1751; --fpl-fdr-4-on: #fff;
+  --fpl-fdr-5: #7b072d; --fpl-fdr-5-on: #fff;
+
+  /* Gradients (linear only, 90deg) */
+  --c-gradient-fpl: linear-gradient(90deg, var(--c-pl-blue), var(--c-pl-lilac));
+  --c-gradient-epl: linear-gradient(90deg, var(--c-pl-yellow), var(--c-pl-green));
+
+  /* Type scale */
+  --font-heading-size-4xl: 4.8rem;
+  --font-heading-size-3xl: 4rem;
+  --font-heading-size-2xl: 3.2rem;
+  --font-heading-size-xl: 2.4rem;
+  --font-heading-size-l: 2rem;
+  --font-heading-size-m: 1.6rem;
+  --font-heading-size-s: 1.4rem;
+  --font-heading-size-xs: 1.2rem;
+  --font-body-size-xl: 2rem;
+  --font-body-size-l: 1.6rem;
+  --font-body-size-m: 1.4rem;
+  --font-body-size-s: 1.2rem;
+  --font-body-size-xs: 1rem;
+
+  --g-typography-regular: 'Hanken Grotesk', 'Helvetica Neue', Arial, sans-serif;
+  --g-typography-regular-bold: 'Hanken Grotesk', 'Helvetica Neue', Arial, sans-serif;
+
+  /* Spacing (8px grid) */
+  --space-xs: 0.4rem;
+  --space-s: 0.8rem;
+  --space-m: 1.2rem;
+  --space-l: 1.6rem;
+  --space-xl: 2.4rem;
+  --space-2xl: 3.2rem;
+  --space-3xl: 4.8rem;
+
+  /* Radius */
+  --radius-s: 0.4rem;
+  --radius-m: 0.8rem;
+  --radius-l: 1.2rem;
+  --radius-xl: 1.6rem;
+  --radius-pill: 99.99rem;
+}
+
+/* LIGHT THEME — purple accents on white surfaces */
+:root, html.light-theme {
+  color-scheme: light;
+  --theme-primary: var(--c-mono-p100);
+  --theme-on-primary: #fff;
+  --theme-primary-container: var(--c-mono-p5);
+  --theme-on-primary-container: var(--c-mono-p100);
+  --theme-surface: #fff;
+  --theme-surface-container: var(--c-mono-p2);
+  --theme-surface-container-high: var(--c-mono-p5);
+  --theme-on-surface: var(--c-mono-p100);
+  --theme-on-surface-variant: var(--c-mono-p70);
+  --theme-outline: var(--c-mono-p30);
+  --theme-outline-variant: var(--c-mono-p10);
+  --theme-hyperlink: var(--c-pl-lilac);
+  --theme-live: var(--c-pl-orange);
+  --theme-error: var(--c-system-error);
+  --theme-success: var(--c-system-success);
+  --theme-glass: rgba(var(--c-pl-purple-rgb), 0.24);
+
+  --theme-body-bg: var(--c-mono-p2);
+  --theme-nav-bg: var(--c-pl-purple);
+  --theme-nav-on: #fff;
+  --theme-nav-active: var(--c-pl-green);
+  --theme-hero-bg: var(--c-pl-purple);
+  --theme-hero-on: #fff;
+  --theme-pitch-bg: #2e7d32;
+  --theme-pitch-line: rgba(255, 255, 255, 0.35);
+}
+
+/* DARK THEME — deep purple surfaces, white/light text */
+html.dark-theme {
+  color-scheme: dark;
+  --theme-primary: #fff;
+  --theme-on-primary: var(--c-mono-p100);
+  --theme-primary-container: var(--c-mono-p90);
+  --theme-on-primary-container: #fff;
+  --theme-surface: var(--c-mono-p110);
+  --theme-surface-container: var(--c-mono-p120);
+  --theme-surface-container-high: var(--c-mono-p110);
+  --theme-on-surface: #fff;
+  --theme-on-surface-variant: var(--c-mono-p40);
+  --theme-outline: var(--c-mono-p60);
+  --theme-outline-variant: var(--c-mono-p80);
+  --theme-hyperlink: var(--c-pl-pink);
+  --theme-live: var(--c-pl-orange);
+  --theme-error: var(--c-system-error);
+  --theme-success: var(--c-system-success);
+  --theme-glass: rgba(var(--c-pl-purple-rgb), 0.24);
+
+  --theme-body-bg: var(--c-mono-p120);
+  --theme-nav-bg: var(--c-mono-p120);
+  --theme-nav-on: #fff;
+  --theme-nav-active: var(--c-pl-green);
+  --theme-hero-bg: var(--c-pl-purple);
+  --theme-hero-on: #fff;
+  --theme-pitch-bg: #1b5e20;
+  --theme-pitch-line: rgba(255, 255, 255, 0.25);
+}

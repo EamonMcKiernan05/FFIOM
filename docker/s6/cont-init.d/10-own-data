@@ -1,0 +1,3 @@
+#!/bin/sh
+# Ensure the bind-mounted data folder is owned by the app user.
+chown -R ffiom:ffiom /data 2>/dev/null || true
