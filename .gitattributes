@@ -1,0 +1,6 @@
+# s6-overlay reads these files byte-exact — CRLF breaks s6-rc type parsing.
+docker/s6/** text eol=lf
+Dockerfile text eol=lf
+*.sh text eol=lf
+compose.yaml text eol=lf
+compose.override.yaml text eol=lf
