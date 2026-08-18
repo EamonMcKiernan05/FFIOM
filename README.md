@@ -13,7 +13,6 @@ One Docker image runs four processes under s6-overlay (all as non-root user `ffi
 | uvicorn (`app.main`) | 8000 | FastAPI game API + frontend |
 | FullTimeAPI (.NET 9) | 5000 | Scrapes fulltime.thefa.com via fa_proxy |
 | fa_proxy (curl_cffi) | 5001 | Chrome-TLS impersonation proxy (defeats Cloudflare on thefa.com) |
-| cloudflared | — | Disabled inside the image; tunnel runs as a systemd service on the host |
 
 Two SQLite databases, bind-mounted from host folders into the container:
 
@@ -30,7 +29,7 @@ Databases are **never** baked into the image — `data/` is in `.dockerignore`, 
 docker compose build        # or: docker build -t ffiom:latest .
 ```
 
-Multi-stage build: .NET SDK publishes the scraper, then python + deps + s6-overlay + cloudflared are layered on the aspnet runtime image.
+Multi-stage build: .NET SDK publishes the scraper, then python + deps + s6-overlay are layered on the aspnet runtime image. Cloudflared is deliberately NOT in the image — the tunnel runs on the host as a systemd service.
 
 ## Deploying to a host
 

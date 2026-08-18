@@ -1,8 +1,0 @@
-#!/bin/sh
-# Tunnel sidecar: only runs if a token is provided (prod). Sleeps otherwise.
-exec /command/s6-envdir /run/s6/container_environment sh -c '
-if [ -n "$TUNNEL_TOKEN" ]; then
-  exec cloudflared tunnel run --token "$TUNNEL_TOKEN"
-fi
-exec sleep infinity
-'

@@ -5,7 +5,7 @@ WORKDIR /src
 COPY FullTimeAPI/FullTimeAPI/ ./FullTimeAPI/
 RUN dotnet publish FullTimeAPI/FullTimeAPI.csproj -c Release -o /out
 
-# Stage 2: runtime — aspnet base + python + s6-overlay + cloudflared
+# Stage 2: runtime — aspnet base + python + s6-overlay
 FROM mcr.microsoft.com/dotnet/aspnet:9.0
 
 # --- base tooling ---
@@ -20,11 +20,6 @@ ADD https://github.com/just-containers/s6-overlay/releases/download/${S6_OVERLAY
 RUN tar -C / -Jxpf /tmp/s6-noarch.tar.xz \
     && tar -C / -Jxpf /tmp/s6-x86.tar.xz \
     && rm /tmp/s6-noarch.tar.xz /tmp/s6-x86.tar.xz
-
-# --- cloudflared (tunnel sidecar) ---
-ARG CLOUDFLARED_VERSION=2025.2.1
-ADD https://github.com/cloudflare/cloudflared/releases/download/${CLOUDFLARED_VERSION}/cloudflared-linux-amd64 /usr/local/bin/cloudflared
-RUN chmod +x /usr/local/bin/cloudflared
 
 # --- app user ---
 RUN useradd -m -u 1000 -s /bin/bash ffiom
@@ -54,8 +49,7 @@ COPY docker/s6/services/ /etc/s6-overlay/s6-rc.d/
 RUN chmod +x /etc/s6-overlay/s6-rc.d/*/run \
     && touch /etc/s6-overlay/s6-rc.d/user/contents.d/api \
            /etc/s6-overlay/s6-rc.d/user/contents.d/faproxy \
-           /etc/s6-overlay/s6-rc.d/user/contents.d/fulltime \
-           /etc/s6-overlay/s6-rc.d/user/contents.d/cloudflared
+           /etc/s6-overlay/s6-rc.d/user/contents.d/fulltime
 
 # --- startup init scripts (run as root before services) ---
 COPY docker/s6/cont-init.d/ /etc/cont-init.d/
