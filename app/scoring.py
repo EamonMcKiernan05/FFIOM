@@ -247,6 +247,52 @@ def calculate_selling_price(purchase_price: float, current_price: float) -> floa
         return current_price
 
 
+# --- In-season price increases -------------------------------------------
+# A player's price rises with their cumulative season points:
+#   +0.05m per 15 points  (flat rule for all clubs, per 2026-08-17/18 brief)
+# The increase is monotonic (price never falls) and is derived from the
+# season total so repeated GW closes are idempotent.
+#
+# NOTE: an earlier brief asked for the two promoted D2 clubs (Colby, RYCOB)
+# to rise at half rate (0.025m/15pts) so they stay conservative vs PL stars.
+# To re-apply that, set PRICE_STEP_D2 = 0.025 (the division hook below is
+# already in place and _update_player_prices passes each player's division).
+PRICE_STEP_PL = 0.05
+PRICE_STEP_D2 = 0.05   # uniform per latest brief; 0.025 to re-enable D2 half-rate
+POINTS_PER_PRICE_STEP = 15
+PRICE_CAP = 17.0
+
+
+def price_step_for_division(division_id) -> float:
+    """Return the per-15-point price step for a division."""
+    return PRICE_STEP_D2 if division_id == 2 else PRICE_STEP_PL
+
+
+def update_player_price(
+    *,
+    start_price: float,
+    current_price: float,
+    total_points_season: int = 0,
+    division_id=None,
+    # Accepted for backward compatibility with older call sites (ignored).
+    selected_by_change: int = 0,
+    gw_points: int = 0,
+    apps: int = 0,
+) -> float:
+    """Compute a player's new price after a gameweek.
+
+    price = min(CAP, max(current_price, start_price + (pts // 15) * step))
+
+    The increase is based on the cumulative season total, so calling this
+    every GW is idempotent and the price only ever rises.
+    """
+    step = price_step_for_division(division_id)
+    increase = (max(0, total_points_season or 0) // POINTS_PER_PRICE_STEP) * step
+    target = (start_price or current_price) + increase
+    new = max(current_price or 0.0, target)
+    return round(min(PRICE_CAP, new), 2)
+
+
 
 
 

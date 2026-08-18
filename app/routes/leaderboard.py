@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
 
-from app.database import get_db, get_bound_db
+from app.database import get_db, get_bound_db, get_current_season
 from app.models import (
     FantasyTeam, User, FantasyTeamHistory, Gameweek, SquadPlayer, Player,
 )
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 
 @router.get("/")
 def get_leaderboard(
-    season: str = Query("2025-26", description="Season to filter by"),
+    season: Optional[str] = Query(None, description="Season to filter by (defaults to current)"),
     limit: int = Query(100, description="Number of entries to return"),
     offset: int = Query(0, description="Pagination offset"),
     db: Session = Depends(get_bound_db),
@@ -24,6 +24,8 @@ def get_leaderboard(
     FPL-style ranking:
     - Sorted by total points (desc), then by rank_sort_index (asc) for ties
     """
+    if season is None:
+        season = get_current_season(db)
     total_count = db.query(FantasyTeam).filter(
         FantasyTeam.season == season
     ).count()
@@ -41,7 +43,7 @@ def get_leaderboard(
     # Get current gameweek points for each team
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False,
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
 
     entries = []
     for rank, ft in enumerate(teams[offset:], start=offset + 1):
@@ -164,7 +166,7 @@ def get_user_rank(user_id: int, db: Session = Depends(get_bound_db)):
     # Get rank change from last GW
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
 
     rank_change = None
     if current_gw:
@@ -200,13 +202,13 @@ def get_user_history(user_id: int, db: Session = Depends(get_bound_db)):
     if not ft:
         raise HTTPException(status_code=404, detail="Fantasy team not found")
 
-    history = (
-        db.query(FantasyTeamHistory)
-        .filter(FantasyTeamHistory.fantasy_team_id == ft.id)
-        .join(Gameweek)
-        .order_by(Gameweek.number.asc())
-        .all()
-    )
+    # Cross-DB: FantasyTeamHistory is in the game DB, Gameweek in FFIOM-DB —
+    # filter on history, then resolve gameweeks lazily and sort in Python.
+    history = db.query(FantasyTeamHistory).filter(
+        FantasyTeamHistory.fantasy_team_id == ft.id,
+    ).all()
+    history = [h for h in history if h.gameweek is not None]
+    history.sort(key=lambda h: h.gameweek.number)
 
     entries = []
     for h in history:

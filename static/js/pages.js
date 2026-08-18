@@ -19,10 +19,17 @@ function initPage() {
     'register': () => {},
   };
   const fn = renderers[page];
-  if (fn) fn().catch((err) => {
-    console.error(page, err);
-    showToast('Failed to load: ' + err.message, 'error');
-  });
+  if (fn) {
+    // Renderers are async (return a Promise), but some (help/login/register)
+    // are synchronous — guard the .catch so a non-Promise return doesn't throw.
+    const result = fn();
+    if (result && typeof result.catch === 'function') {
+      result.catch((err) => {
+        console.error(page, err);
+        showToast('Failed to load: ' + err.message, 'error');
+      });
+    }
+  }
 }
 
 /* ---------- HOME ---------- */
@@ -96,8 +103,8 @@ async function renderMyTeam() {
     return;
   }
   const [squad, chips] = await Promise.all([
-    apiJson(`/users/${currentTeam.id}/squad`).catch(() => []),
-    apiJson(`/users/${currentTeam.id}/chips`).catch(() => ({})),
+    apiJson('/users/squad').catch(() => []),
+    apiJson('/users/chips').catch(() => ({})),
   ]);
 
   if (!squad.length) {
@@ -151,7 +158,7 @@ function pitchPlayerHtml(s) {
   const badge = s.is_captain ? '<span class="pitch-player__c">C</span>'
     : s.is_vice_captain ? '<span class="pitch-player__vc">V</span>' : '';
   return `
-    <div class="pitch-player" onclick="showSquadPlayerModal(${s.id}, '${escapeHtml(s.name).replace(/'/g, "\\'")}')">
+    <div class="pitch-player" onclick="showSquadPlayerModal(${s.id}, '${escapeHtml(s.name).replace(/'/g, "\\'")}', ${s.is_starting ? 'true' : 'false'})">
       ${badge}
       <div class="pitch-player__shirt">${clubLogo(s.team_name || '', '')}</div>
       <div class="pitch-player__name">${escapeHtml(s.name)}</div>
@@ -159,31 +166,32 @@ function pitchPlayerHtml(s) {
     </div>`;
 }
 
-async function showSquadPlayerModal(squadId, name) {
+async function showSquadPlayerModal(squadId, name, isStarting) {
   openModal(`
     <h3 style="margin-bottom:1.6rem">${escapeHtml(name)}</h3>
     <div style="display:flex;flex-direction:column;gap:0.8rem">
       <button class="button button--filled" onclick="setCaptain(${squadId})">Make captain</button>
       <button class="button button--outlined" onclick="setViceCaptain(${squadId})">Make vice-captain</button>
-      <button class="button button--outlined" onclick="toggleBench(${squadId})">Bench / Start</button>
+      <button class="button button--outlined" onclick="toggleBench(${squadId}, ${isStarting ? 'true' : 'false'})">Bench / Start</button>
     </div>`);
 }
 
 async function setCaptain(squadId) {
   try {
-    await apiJson(`/users/${currentTeam.id}/captain/${squadId}`, { method: 'POST' });
+    await apiJson(`/users/captain/${squadId}`, { method: 'POST' });
     closeModal(); showToast('Captain updated', 'success'); renderMyTeam();
   } catch (e) { showToast(e.message, 'error'); }
 }
 async function setViceCaptain(squadId) {
   try {
-    await apiJson(`/users/${currentTeam.id}/vice-captain/${squadId}`, { method: 'POST' });
+    await apiJson(`/users/vice-captain/${squadId}`, { method: 'POST' });
     closeModal(); showToast('Vice-captain updated', 'success'); renderMyTeam();
   } catch (e) { showToast(e.message, 'error'); }
 }
-async function toggleBench(squadId) {
+async function toggleBench(squadId, isStarting) {
   try {
-    await apiJson(`/users/${currentTeam.id}/squad/${squadId}/bench`, { method: 'POST' });
+    // isStarting player -> bench (auto-promotes top bench player); bench player -> start
+    await apiJson(`/users/squad/${squadId}/${isStarting ? 'bench' : 'start'}`, { method: 'POST' });
     closeModal(); showToast('Squad updated', 'success'); renderMyTeam();
   } catch (e) { showToast(e.message, 'error'); }
 }
@@ -199,7 +207,7 @@ function renderChips(chips) {
     const isActive = !!(c.active ?? c.is_active);
     const used = !!c.used;
     return `
-    <button class="chip-button ${isActive ? 'is-active' : ''}" ${used || !c.available && !isActive ? 'disabled' : ''}
+    <button class="chip-button ${isActive ? 'is-active' : ''}" ${used && !isActive ? 'disabled' : ''}
       onclick="toggleChip('${type}', ${isActive})">
       ${escapeHtml(label(type))}${used ? ' (used)' : ''}
     </button>`;
@@ -209,7 +217,7 @@ function renderChips(chips) {
 async function toggleChip(chipType, isActive) {
   try {
     const action = isActive ? 'cancel' : 'activate';
-    await apiJson(`/users/${currentTeam.id}/chips/${action}/${chipType}`, { method: 'POST' });
+    await apiJson(`/users/chips/${action}/${chipType}`, { method: 'POST' });
     showToast(`Chip ${isActive ? 'cancelled' : 'activated'}`, 'success');
     renderMyTeam();
   } catch (e) { showToast(e.message, 'error'); }
@@ -249,7 +257,7 @@ async function renderTransfers() {
   filterTransferIn();
 
   if (currentTeam) {
-    const squad = await apiJson(`/users/${currentTeam.id}/squad`).catch(() => []);
+    const squad = await apiJson('/users/squad').catch(() => []);
     const tb = document.querySelector('#to-table tbody');
     tb.innerHTML = squad.map((s) => {
       const name = (s.player && s.player.name) || s.name || 'Unknown';
@@ -374,7 +382,8 @@ function filterPlayers() {
 
 async function showPlayerDetail(id) {
   try {
-    const p = await apiJson(`/players/${id}/detail`);
+    const data = await apiJson(`/players/${id}/detail`);
+    const p = data.player || data;
     openModal(`
       <h3 style="margin-bottom:0.4rem">${escapeHtml(p.name)}</h3>
       <p style="color:var(--theme-on-surface-variant);margin-bottom:1.6rem">
@@ -463,7 +472,7 @@ async function renderHistory() {
   }
   let hist = [];
   try {
-    const data = await apiJson(`/users/${currentUser.id}/team/history`);
+    const data = await apiJson(`/leaderboard/${currentUser.id}/history`);
     hist = data.history || data.gameweeks || data || [];
   } catch (_) {}
   if (!Array.isArray(hist) || !hist.length) {
@@ -543,7 +552,7 @@ async function loadMyLeagues() {
   if (!currentUser) { el.innerHTML = ''; return; }
   let leagues = [];
   try {
-    const data = await apiJson(`/leagues/my-leagues/${currentUser.id}`);
+    const data = await apiJson('/leagues/my-leagues');
     leagues = data.leagues || data || [];
   } catch (_) {}
   if (!Array.isArray(leagues) || !leagues.length) {
@@ -570,7 +579,7 @@ async function createLeague(e) {
   if (!currentUser) { showToast('Sign in first', 'error'); return; }
   const name = document.getElementById('lg-name').value.trim();
   try {
-    const ml = await apiJson(`/leagues/?user_id=${currentUser.id}`, {
+    const ml = await apiJson('/leagues/', {
       method: 'POST',
       body: JSON.stringify({ name, is_h2h: false }),
     });
@@ -584,7 +593,7 @@ async function joinLeague(e) {
   if (!currentUser) { showToast('Sign in first', 'error'); return; }
   const code = document.getElementById('lg-code').value.trim().toUpperCase();
   try {
-    await apiJson(`/leagues/join?code=${encodeURIComponent(code)}&user_id=${currentUser.id}`, { method: 'POST' });
+    await apiJson(`/leagues/join?code=${encodeURIComponent(code)}`, { method: 'POST' });
     showToast('Joined league', 'success');
     loadMyLeagues();
   } catch (err) { showToast(err.message, 'error'); }
@@ -607,22 +616,30 @@ async function renderDreamTeam() {
 async function loadDreamTeam() {
   const gwId = document.getElementById('dt-gw').value;
   const root = document.getElementById('dt-root');
-  const data = await apiJson(`/dream-team/${gwId}`);
-  if (!data.players || !data.players.length) {
-    root.innerHTML = `<div class="empty-state"><h2>No dream team yet</h2><p>${escapeHtml(data.message || 'This gameweek has not been scored.')}</p></div>`;
+  let data;
+  try {
+    data = await apiJson(`/gameweeks/${gwId}/dream-team`);
+  } catch (_) {
+    root.innerHTML = `<div class="empty-state"><h2>No dream team yet</h2><p>This gameweek has not been scored yet.</p></div>`;
+    return;
+  }
+  const dt = data.dream_team || data;
+  const players = dt.members || dt.players || [];
+  if (!players.length) {
+    root.innerHTML = `<div class="empty-state"><h2>No dream team yet</h2><p>${escapeHtml(dt.message || 'This gameweek has not been scored.')}</p></div>`;
     return;
   }
   const rows = [];
-  for (let i = 0; i < data.players.length; i += 4) rows.push(data.players.slice(i, i + 4));
+  for (let i = 0; i < players.length; i += 4) rows.push(players.slice(i, i + 4));
   root.innerHTML = `
-    <div class="gw-banner"><div><strong>Gameweek ${data.gameweek ?? ''} Dream Team</strong></div>
-      <div class="gw-banner__countdown">${data.total_points} pts</div></div>
+    <div class="gw-banner"><div><strong>Gameweek ${dt.gameweek ?? ''} Dream Team</strong></div>
+      <div class="gw-banner__countdown">${dt.total_points ?? 0} pts</div></div>
     <div class="pitch" style="margin-top:2.4rem">
       ${rows.map((row) => `<div class="pitch__row">${row.map((p) => `
         <div class="pitch-player">
           ${p.is_captain ? '<span class="pitch-player__c">C</span>' : ''}
           <div class="pitch-player__shirt">${clubLogo(p.team_name, '')}</div>
-          <div class="pitch-player__name">${escapeHtml(p.name)}</div>
+          <div class="pitch-player__name">${escapeHtml(p.player_name || p.name || '')}</div>
           <div class="pitch-player__pts">${p.points} pts</div>
         </div>`).join('')}</div>`).join('')}
     </div>`;

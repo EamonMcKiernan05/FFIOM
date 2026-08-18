@@ -79,7 +79,7 @@ def get_current_gameweek(db: Session = Depends(get_bound_db)):
 
     gw = db.query(Gameweek).filter(
         Gameweek.closed == False,
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
 
     if not gw:
         return {"gameweek": None, "message": "No active gameweek"}

@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional, List
 
-from app.database import get_db, get_bound_db
+from app.database import get_db, get_bound_db, get_current_season
 from app.models import (
     H2hLeague, H2hParticipant, H2hMatch, FantasyTeam, User, Gameweek,
 )
@@ -111,7 +111,7 @@ def create_h2h_league(
 
     league = H2hLeague(
         name=name,
-        season="2025-26",
+        season=get_current_season(db),
         format_type=format_type,
         admin_user_id=user_id or 1,
         invite_code=code,

@@ -21,7 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from app.database import get_bound_db
+from app.database import get_bound_db, get_current_season
 from app.models import User, RefreshToken
 from app.schemas import (
     UserCreate, LoginRequest, RefreshRequest, TokenResponse, UserResponse,
@@ -122,13 +122,13 @@ def register(
 
     create_email_identity(db, new_user.id, user_data.email)
 
-    # Create fantasy team
+    # Create fantasy team (season auto-advances via get_current_season)
     from app.models import FantasyTeam
     team_name = (user_data.team_name or f"{user_data.username}'s Team").strip()
     ft = FantasyTeam(
         user_id=new_user.id,
         name=team_name,
-        season="2025-26",
+        season=get_current_season(db),
         budget=90.0,
         budget_remaining=90.0,
         free_transfers=1,
@@ -397,13 +397,13 @@ def google_oauth_callback(
 
     db.commit()
 
-    # Create fantasy team for new users
+    # Create fantasy team for new users (season auto-advances via get_current_season)
     if action == "created":
         from app.models import FantasyTeam
         ft = FantasyTeam(
             user_id=user.id,
             name=f"{user.username}'s Team",
-            season="2025-26",
+            season=get_current_season(db),
             budget=90.0,
             budget_remaining=90.0,
             free_transfers=1,

@@ -25,7 +25,7 @@ def get_current_gw_info(db: Session = Depends(get_bound_db)):
     """
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
 
     if not current_gw:
         # Check if season hasn't started

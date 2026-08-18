@@ -24,11 +24,17 @@ def get_price_changes(
     FPL price changes are triggered when enough managers make transfers.
     Prices can rise or fall based on demand.
     """
-    history_entries = db.query(PlayerPriceHistory).join(Player)\
+    # NOTE: PlayerPriceHistory lives in the game DB, Player in FFIOM-DB — a
+    # single-SQL cross-DB join is impossible, so filter/sort on history columns
+    # and resolve the player via the lazy (per-bind) relationship.
+    history_entries = db.query(PlayerPriceHistory)\
         .order_by(PlayerPriceHistory.new_price.desc()).all()
 
     changes = []
     for entry in history_entries:
+        player = entry.player
+        if not player:
+            continue
         change = entry.new_price - entry.old_price
         if abs(change) < min_change:
             continue
@@ -43,11 +49,11 @@ def get_price_changes(
 
         changes.append(PlayerPriceResponse(
             player_id=entry.player_id,
-            player_name=f"{entry.player.first_name} {entry.player.last_name}",
+            player_name=f"{player.first_name} {player.last_name}",
             old_price=entry.old_price,
             new_price=entry.new_price,
             change=change,
-            team=entry.player.team,
+            team=player.team,
             gameweek_id=entry.gameweek_id,
             timestamp=entry.timestamp
         ))
@@ -62,7 +68,9 @@ def get_price_leaders(
     db: Session = Depends(get_bound_db)
 ):
     """Get top price risers or fallers this season."""
-    history_entries = db.query(PlayerPriceHistory).join(Player)\
+    # Cross-DB note: sort on PlayerPriceHistory columns only; resolve players
+    # via lazy relationships (see get_price_changes).
+    history_entries = db.query(PlayerPriceHistory)\
         .order_by(
             (PlayerPriceHistory.new_price - PlayerPriceHistory.old_price).desc()
             if direction == "rise"
@@ -71,14 +79,17 @@ def get_price_leaders(
 
     changes = []
     for entry in history_entries:
+        player = entry.player
+        if not player:
+            continue
         change = entry.new_price - entry.old_price
         changes.append(PlayerPriceResponse(
             player_id=entry.player_id,
-            player_name=f"{entry.player.first_name} {entry.player.last_name}",
+            player_name=f"{player.first_name} {player.last_name}",
             old_price=entry.old_price,
             new_price=entry.new_price,
             change=change,
-            team=entry.player.team,
+            team=player.team,
             gameweek_id=entry.gameweek_id,
             timestamp=entry.timestamp
         ))

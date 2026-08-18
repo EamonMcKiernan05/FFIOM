@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import Optional, Annotated
 
-from app.database import get_db, get_bound_db
+from app.database import get_db, get_bound_db, get_current_season
 from app.models import (
     User, FantasyTeam, SquadPlayer, Player, Gameweek,
     FantasyTeamHistory, Team,
@@ -54,7 +54,7 @@ def get_current_user(
     if ft:
         current_gw = db.query(Gameweek).filter(
             Gameweek.closed == False
-        ).order_by(Gameweek.number.desc()).first()
+        ).order_by(Gameweek.number.asc()).first()
         team_data = {
             "id": ft.id,
             "user_id": ft.user_id,
@@ -171,7 +171,7 @@ def activate_chip_route(
 
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
     gw_num = current_gw.number if current_gw else 1
 
     available, message = check_chip_availability(ft, chip_type, gw_num)
@@ -199,7 +199,7 @@ def cancel_chip_route(
 
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
     gw_num = current_gw.number if current_gw else 1
 
     success, message = cancel_chip(ft, chip_type, gw_num)
@@ -379,7 +379,7 @@ def register(user: UserCreate, db: Session = Depends(get_bound_db)):
     ft = FantasyTeam(
         user_id=new_user.id,
         name=team_name,
-        season="2025-26",
+        season=get_current_season(db),
         budget=90.0,
         budget_remaining=90.0,
         free_transfers=1,
@@ -455,7 +455,7 @@ def get_fantasy_team(user_id: int, db: Session = Depends(get_bound_db)):
     # Get current gameweek number for chip status
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
 
     return {
         "id": ft.id,
@@ -514,7 +514,7 @@ def create_fantasy_team(
     ft = FantasyTeam(
         user_id=user.id,
         name=team_name,
-        season="2025-26",
+        season=get_current_season(db),
         budget=90.0,
         budget_remaining=90.0,
         free_transfers=1,

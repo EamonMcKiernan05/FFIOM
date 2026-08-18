@@ -33,10 +33,13 @@ def get_captain_hints(
     if not ft:
         raise HTTPException(status_code=404, detail="Fantasy team not found")
     
-    squad = db.query(SquadPlayer).join(Player).filter(
+    # Cross-DB: SquadPlayer is in the game DB, Player in FFIOM-DB — no
+    # single-SQL join possible; filter on SquadPlayer and resolve players
+    # via the lazy (per-bind) relationship.
+    squad = db.query(SquadPlayer).filter(
         SquadPlayer.fantasy_team_id == ft.id,
-        Player.is_active == True,
     ).all()
+    squad = [sp for sp in squad if sp.player is not None and sp.player.is_active]
     
     # Get current or target gameweek
     if gw_id:
@@ -44,7 +47,7 @@ def get_captain_hints(
     else:
         current_gw = db.query(Gameweek).filter(
             Gameweek.closed == False,
-        ).order_by(Gameweek.number.desc()).first()
+        ).order_by(Gameweek.number.asc()).first()
     
     if not current_gw:
         return {"hints": [], "message": "No active gameweek"}
@@ -83,7 +86,7 @@ def get_captain_hints(
         
         # Fixture difficulty score (0-100, higher = easier = better)
         diff_info = team_difficulty.get(player.team_id, {})
-        fixture_difficulty = diff_info.get("difficulty", 3)
+        fixture_difficulty = diff_info.get("difficulty") or 3
         is_home = diff_info.get("is_home", True)
         # Lower difficulty = easier = higher score
         fixture_score = (6 - fixture_difficulty) * 20  # 1->100, 2->80, ..., 5->20
@@ -102,7 +105,7 @@ def get_captain_hints(
             fixture_score * 0.25 +   # Fixture difficulty
             ict_score * 0.20 +       # ICT index
             ownership_score * 0.10 + # Popularity
-            points_score * 0.10,     # Total points
+            points_score * 0.10      # Total points
         )
         
         hints.append({
@@ -172,7 +175,7 @@ def compare_captain_options(
     # Get current GW fixtures
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False,
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
     
     fixtures = db.query(Fixture).filter(
         Fixture.gameweek_id == current_gw.id if current_gw else None,
@@ -196,13 +199,13 @@ def compare_captain_options(
             for fx in fixtures:
                 if fx.home_team_id == player.team_id:
                     diff_info = {
-                        "difficulty": fx.home_difficulty,
+                        "difficulty": fx.home_difficulty or 3,
                         "is_home": True,
                         "opponent": fx.away_team_name,
                     }
                 elif fx.away_team_id == player.team_id:
                     diff_info = {
-                        "difficulty": fx.away_difficulty,
+                        "difficulty": fx.away_difficulty or 3,
                         "is_home": False,
                         "opponent": fx.home_team_name,
                     }

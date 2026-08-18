@@ -192,7 +192,7 @@ def get_current_gameweek():
     db = next(get_bound_db())
     gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
     if not gw:
         return {"gameweek": None}
     return {

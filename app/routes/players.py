@@ -59,7 +59,7 @@ def list_players(
     # Add current gameweek points
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
 
     result = []
     for p in players:

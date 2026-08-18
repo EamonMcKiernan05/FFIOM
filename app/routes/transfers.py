@@ -84,7 +84,7 @@ def transfer_player(
 
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
 
     is_wildcard = ft.active_chip == "wildcard"
     is_free_hit = ft.active_chip == "free_hit"
@@ -140,6 +140,7 @@ def transfer_player(
             purchase_price=player_in.price,
             selling_price=player_in.price,
             bench_priority=99 if is_starting else (squad_len - 9),
+            transferred_in_gw=current_gw.number if current_gw else None,
         )
         db.add(new_sp)
         ft.budget_remaining = round(ft.budget_remaining - player_in.price, 1)
@@ -208,6 +209,7 @@ def transfer_player(
         bench_priority=sp_out.bench_priority,
         purchase_price=player_in.price,
         selling_price=player_in.price,
+        transferred_in_gw=current_gw.number if current_gw else None,
     )
     db.add(new_sp)
     db.delete(sp_out)
@@ -263,7 +265,7 @@ def confirm_transfers(
 
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
 
     is_wildcard = ft.active_chip == "wildcard"
     is_free_hit = ft.active_chip == "free_hit"
@@ -349,7 +351,8 @@ def confirm_transfers(
             bench_priority=sp_out.bench_priority,
             purchase_price=player_in.price,
             selling_price=player_in.price,
-        )
+            transferred_in_gw=current_gw.number if current_gw else None,
+            )
         db.add(new_sp)
         db.delete(sp_out)
 
@@ -433,7 +436,7 @@ def make_transfer(
     # Check deadline
     current_gw = db.query(Gameweek).filter(
         Gameweek.closed == False
-    ).order_by(Gameweek.number.desc()).first()
+    ).order_by(Gameweek.number.asc()).first()
 
     if ft.transfer_deadline_exceeded:
         raise HTTPException(status_code=400, detail="Transfer deadline exceeded for this gameweek")
@@ -450,20 +453,24 @@ def make_transfer(
     if not player_in:
         raise HTTPException(status_code=404, detail="Player to buy not found")
 
-    player_out_sp = db.query(SquadPlayer).join(Player).filter(
+    # Cross-DB: SquadPlayer (game DB) vs Player (FFIOM-DB) — no single-SQL
+    # join; filter on SquadPlayer columns, resolve player lazily.
+    player_out_sp = db.query(SquadPlayer).filter(
         SquadPlayer.fantasy_team_id == ft.id,
-        Player.id == request.player_out_id,
+        SquadPlayer.player_id == request.player_out_id,
     ).first()
     if not player_out_sp:
         raise HTTPException(status_code=404, detail="Player to sell not in your squad")
 
     player_out = player_out_sp.player
 
-    # Validate squad composition
-    team_players = db.query(SquadPlayer).join(Player).filter(
-        SquadPlayer.fantasy_team_id == ft.id,
-        Player.team_id == player_in.team_id,
-    ).count()
+    # Validate squad composition (count via lazy player resolution)
+    team_players = sum(
+        1 for sp in db.query(SquadPlayer).filter(
+            SquadPlayer.fantasy_team_id == ft.id,
+        ).all()
+        if sp.player is not None and sp.player.team_id == player_in.team_id
+    )
     if team_players >= 3 and player_out.team_id != player_in.team_id:
         raise HTTPException(
             status_code=400,
@@ -508,6 +515,7 @@ def make_transfer(
         bench_priority=player_out_sp.bench_priority,
         purchase_price=player_in.price,
         selling_price=player_in.price,
+        transferred_in_gw=current_gw.number if current_gw else None,
     )
     db.add(new_sp)
     db.delete(player_out_sp)

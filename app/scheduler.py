@@ -450,7 +450,7 @@ def apply_deadline():
     try:
         current_gw = db.query(Gameweek).filter(
             Gameweek.closed == False
-        ).order_by(Gameweek.number.desc()).first()
+        ).order_by(Gameweek.number.asc()).first()
 
         if current_gw:
             current_gw.closed = True
@@ -472,7 +472,7 @@ def process_gameweek_end():
     try:
         current_gw = db.query(Gameweek).filter(
             Gameweek.closed == False
-        ).order_by(Gameweek.number.desc()).first()
+        ).order_by(Gameweek.number.asc()).first()
 
         if current_gw:
             if not current_gw.scored:
@@ -661,8 +661,19 @@ def _process_transfer_rollovers(db):
 
 
 def _update_player_prices(db, gw_id: int):
-    """Update player prices based on performance."""
+    """Update player prices based on cumulative season performance.
+
+    - Price rises +0.05m per 15 season points (flat rule; see scoring.update_player_price).
+    - Records a player_price_history row for each player whose price moved.
+    - Credits the user budget top-up for squad players whose price rose since they
+      were transferred in (+0.1m per full 0.2m of rise).
+    """
+    from app.models import PlayerPriceHistory
+
     total_teams = db.query(FantasyTeam).count()
+    # division lookup per player (team -> division)
+    team_div = {t.id: t.division_id for t in db.query(Team).all()}
+
     for player in db.query(Player).filter(Player.is_active == True).all():
         squad_count = db.query(SquadPlayer).filter(SquadPlayer.player_id == player.id).count()
         pct = (squad_count / max(total_teams, 1)) * 100
@@ -674,24 +685,57 @@ def _update_player_prices(db, gw_id: int):
         if recent:
             player.form = scoring.calculate_form([p.total_points for p in recent])
 
-        last_gw = db.query(PlayerGameweekPoints).filter(
-            PlayerGameweekPoints.player_id == player.id,
-            PlayerGameweekPoints.gameweek_id == gw_id,
-        ).first()
-        gw_points = last_gw.total_points if last_gw else 0
-
         old = player.price
         new = scoring.update_player_price(
-            selected_by_change=0,
-            gw_points=gw_points,
+            start_price=player.price_start,
             current_price=player.price,
             total_points_season=player.total_points_season or 0,
-            apps=player.apps or 0,
+            division_id=team_div.get(player.team_id),
         )
         player.price_change = int(round((new - old) * 10))
         player.price = new
+        if abs(new - old) > 1e-9:
+            db.add(PlayerPriceHistory(
+                player_id=player.id, old_price=old, new_price=new, gameweek_id=gw_id,
+            ))
 
     db.commit()
+    _credit_price_rise_topups(db)
+
+
+def _credit_price_rise_topups(db):
+    """Credit +0.1m to a user's budget for every full 0.2m a squad player's price
+    has risen above the price at the gameweek they were transferred in.
+
+    Per player we track the cumulative amount already paid out
+    (squad_players.budget_topup_awarded) and only credit the delta, so repeated
+    gameweek closes never double-pay.
+    """
+    from app.models import SquadPlayer as SP
+
+    topup = 0
+    for sp in db.query(SP).all():
+        if sp.transferred_in_gw is None or not sp.purchase_price:
+            continue
+        base = sp.purchase_price
+        current = sp.player.price if sp.player else base
+        rise = current - base
+        if rise <= 0:
+            continue
+        due = (int(rise / 0.2) * 0.1)          # for every full 0.2m rise -> 0.1m
+        due = round(due, 2)
+        already = sp.budget_topup_awarded or 0.0
+        delta = round(due - already, 2)
+        if delta > 0:
+            sp.budget_topup_awarded = due
+            ft = db.query(FantasyTeam).filter(FantasyTeam.id == sp.fantasy_team_id).first()
+            if ft:
+                ft.budget = round(ft.budget + delta, 2)
+                ft.budget_remaining = round(ft.budget_remaining + delta, 2)
+                topup += delta
+    db.commit()
+    if topup:
+        logger.info(f"Price-rise budget top-ups credited: {topup:.2f}m")
 
 
 def _revert_free_hits(db):

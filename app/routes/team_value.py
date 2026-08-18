@@ -38,13 +38,13 @@ def get_team_value(team_id: int, db: Session = Depends(get_bound_db)):
             current_value += player.price
 
     # Get team value history from gameweek history
-    history = (
-        db.query(FantasyTeamHistory)
-        .filter(FantasyTeamHistory.fantasy_team_id == team_id)
-        .join(Gameweek)
-        .order_by(Gameweek.number.asc())
-        .all()
-    )
+    # Cross-DB: FantasyTeamHistory (game DB) vs Gameweek (FFIOM-DB) — no
+    # single-SQL join possible; filter on history, resolve gameweeks lazily.
+    history = db.query(FantasyTeamHistory).filter(
+        FantasyTeamHistory.fantasy_team_id == team_id,
+    ).all()
+    history = [h for h in history if h.gameweek is not None]
+    history.sort(key=lambda h: h.gameweek.number)
 
     value_history = []
     for h in history:

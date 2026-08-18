@@ -396,6 +396,16 @@ class SquadPlayer(Base):
     purchase_price = Column(Float, default=0.0)  # Price when bought by this manager
     selling_price = Column(Float, default=0.0)   # Selling price (current or half-increase)
 
+    # Which gameweek this player was transferred into this squad.
+    # The price-increase budget top-up is measured from the price at this GW.
+    transferred_in_gw = Column(Integer, nullable=True)
+
+    # Cumulative budget top-up (m) already credited for this player's price rises.
+    # +0.1m is added to the user's budget for every full 0.2m the player's price
+    # has risen above the transfer-in price; we track what's been paid out so we
+    # only credit the delta each gameweek.
+    budget_topup_awarded = Column(Float, default=0.0)
+
     # Total points accumulated for this manager
     total_points = Column(Integer, default=0)
 

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List
 
-from app.database import get_db, get_bound_db
+from app.database import get_db, get_bound_db, get_current_season
 from app.models import (
     MiniLeague, MiniLeagueMember, FantasyTeam, User, Gameweek,
     FantasyTeamHistory,
@@ -51,7 +51,7 @@ def create_mini_league(
     ml = MiniLeague(
         name=league.name,
         code=code,
-        season="2025-26",
+        season=get_current_season(db),
         is_h2h=league.is_h2h,
         admin_user_id=user.id,
     )
@@ -103,32 +103,16 @@ def join_mini_league(
     }
 
 
-@router.get("/{ml_id}", response_model=MiniLeagueResponse)
-def get_mini_league(ml_id: int, db: Session = Depends(get_bound_db)):
-    """Get mini-league details with leaderboard."""
-    ml = db.query(MiniLeague).filter(MiniLeague.id == ml_id).first()
-    if not ml:
-        raise HTTPException(status_code=404, detail="League not found")
-
-    return _build_ml_response(ml, db)
-
-
-@router.get("/by-code/{code}")
-def get_mini_league_by_code(code: str, db: Session = Depends(get_bound_db)):
-    """Get mini-league by invite code."""
-    ml = db.query(MiniLeague).filter(MiniLeague.code == code.upper()).first()
-    if not ml:
-        raise HTTPException(status_code=404, detail="League not found")
-
-    return _build_ml_response(ml, db)
-
-
 @router.get("/my-leagues")
 def get_user_leagues(
     user: User = Depends(get_current_user_from_token),
     db: Session = Depends(get_bound_db),
 ):
-    """Get all mini-leagues the authenticated user is part of."""
+    """Get all mini-leagues the authenticated user is part of.
+
+    Registered before /{ml_id} so the literal "my-leagues" segment is not
+    captured by the {ml_id} path param (which would 422 on int parsing).
+    """
     ft = db.query(FantasyTeam).filter(FantasyTeam.user_id == user.id).first()
     if not ft:
         raise HTTPException(status_code=404, detail="Fantasy team not found")
@@ -151,6 +135,26 @@ def get_user_leagues(
         })
 
     return {"leagues": leagues}
+
+
+@router.get("/{ml_id}", response_model=MiniLeagueResponse)
+def get_mini_league(ml_id: int, db: Session = Depends(get_bound_db)):
+    """Get mini-league details with leaderboard."""
+    ml = db.query(MiniLeague).filter(MiniLeague.id == ml_id).first()
+    if not ml:
+        raise HTTPException(status_code=404, detail="League not found")
+
+    return _build_ml_response(ml, db)
+
+
+@router.get("/by-code/{code}")
+def get_mini_league_by_code(code: str, db: Session = Depends(get_bound_db)):
+    """Get mini-league by invite code."""
+    ml = db.query(MiniLeague).filter(MiniLeague.code == code.upper()).first()
+    if not ml:
+        raise HTTPException(status_code=404, detail="League not found")
+
+    return _build_ml_response(ml, db)
 
 
 @router.post("/{ml_id}/calculate-ranks")
@@ -226,7 +230,7 @@ def _build_ml_response(ml: "MiniLeague", db: Session) -> dict:
         # Get current GW points
         current_gw = db.query(Gameweek).filter(
             Gameweek.closed == False
-        ).order_by(Gameweek.number.desc()).first()
+        ).order_by(Gameweek.number.asc()).first()
 
         gw_points = None
         if current_gw:
