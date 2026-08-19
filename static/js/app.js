@@ -301,6 +301,13 @@ function initFooterYear() {
   if (el) el.textContent = String(new Date().getFullYear());
 }
 
+// ===== STICKY MOBILE CTA (home page, logged-out only) =====
+function initMobileCTA() {
+  const bar = document.getElementById('mobile-cta-bar');
+  if (!bar) return;
+  bar.hidden = !!getToken();
+}
+
 // ===== PASSWORD VISIBILITY TOGGLES =====
 function initPasswordToggles() {
   document.querySelectorAll('[data-pw-toggle]').forEach((btn) => {
@@ -453,6 +460,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initScrollUX();
   initFooterYear();
   initPasswordToggles();
+  initMobileCTA();
   await loadMe();
   renderNavAuth();
   if (typeof initPage === 'function') initPage();

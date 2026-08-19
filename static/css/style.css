@@ -286,7 +286,23 @@ html.dark-theme .theme-toggle__sun { display: none; }
 .gw-banner__countdown { font-size: var(--font-heading-size-l); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .empty-state { text-align: center; padding: var(--space-3xl) var(--space-l); color: var(--theme-on-surface-variant); }
-.loading { text-align: center; padding: var(--space-2xl); color: var(--theme-on-surface-variant); }
+.loading { text-align: center; padding: var(--space-2xl); color: var(--theme-on-surface-variant); animation: loading-pulse 1.2s ease-in-out infinite; }
+@keyframes loading-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+@media (prefers-reduced-motion: reduce) {
+  .loading { animation: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* Sticky mobile CTA (conversion: always-reachable sign-up on home) */
+.mobile-cta-bar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 690;
+  background: var(--theme-surface); border-top: 0.1rem solid var(--theme-outline);
+  padding: var(--space-s) var(--space-l);
+  box-shadow: 0 -0.2rem 1.2rem rgba(0, 0, 0, 0.15);
+}
+.mobile-cta-bar .button { width: 100%; }
+.mobile-cta-bar[hidden] { display: none; }
+@media (min-width: 841px) { .mobile-cta-bar { display: none; } }
 
 .points-flash { color: var(--c-pl-green); font-weight: 700; }
 
