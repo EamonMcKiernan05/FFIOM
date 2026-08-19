@@ -215,6 +215,16 @@ function renderChips(chips) {
 }
 
 async function toggleChip(chipType, isActive) {
+  const label = chipType.replace(/_/g, ' ');
+  if (!isActive) {
+    // Chips are once-per-season — confirm before burning one
+    confirmModal(`Activate ${label}?`, `${label} can only be used once this season. Activate it now?`, 'Activate', () => doChip(chipType, false));
+  } else {
+    doChip(chipType, true);
+  }
+}
+
+async function doChip(chipType, isActive) {
   try {
     const action = isActive ? 'cancel' : 'activate';
     await apiJson(`/users/chips/${action}/${chipType}`, { method: 'POST' });
@@ -314,19 +324,24 @@ function clearTransfer() { selectedIn = selectedOut = null; renderTransferConfir
 async function confirmTransfer() {
   if (!selectedIn) return;
   if (!currentTeam) { showToast('Create a team first', 'error'); return; }
-  try {
-    await apiJson('/transfers/player', {
-      method: 'POST',
-      body: JSON.stringify({
-        player_in_id: selectedIn.id,
-        player_out_id: selectedOut ? selectedOut.id : null,
-      }),
-    });
-    showToast('Transfer confirmed', 'success');
-    selectedIn = selectedOut = null;
-    await loadMe();
-    renderTransfers();
-  } catch (e) { showToast(e.message, 'error'); }
+  const msg = selectedOut
+    ? `Bring IN ${selectedIn.name} (£${selectedIn.price.toFixed(1)}m) and take OUT ${selectedOut.name}?`
+    : `Bring IN ${selectedIn.name} (£${selectedIn.price.toFixed(1)}m)?`;
+  confirmModal('Confirm transfer', msg, 'Confirm transfer', async () => {
+    try {
+      await apiJson('/transfers/player', {
+        method: 'POST',
+        body: JSON.stringify({
+          player_in_id: selectedIn.id,
+          player_out_id: selectedOut ? selectedOut.id : null,
+        }),
+      });
+      showToast('Transfer confirmed', 'success');
+      selectedIn = selectedOut = null;
+      await loadMe();
+      renderTransfers();
+    } catch (e) { showToast(e.message, 'error'); }
+  });
 }
 
 /* ---------- PLAYERS ---------- */
@@ -564,7 +579,9 @@ async function loadMyLeagues() {
     <div class="card-grid">${leagues.map((l) => `
       <div class="card">
         <h3 class="card__title">${escapeHtml(l.name)}</h3>
-        <p style="color:var(--theme-on-surface-variant);font-size:1.4rem">Code: <strong style="letter-spacing:0.1em">${escapeHtml(l.code)}</strong> &middot; ${l.member_count ?? (l.members ? l.members.length : '—')} members</p>
+        <p style="color:var(--theme-on-surface-variant);font-size:1.4rem">Code: <strong style="letter-spacing:0.1em">${escapeHtml(l.code)}</strong>
+          <button class="button button--outlined button--small" style="margin-left:0.8rem" onclick="copyLeagueCode('${escapeHtml(l.code)}')">Copy</button>
+          &middot; ${l.member_count ?? (l.members ? l.members.length : '—')} members</p>
         ${Array.isArray(l.standings) && l.standings.length ? `
           <div class="table-wrap" style="margin-top:1.2rem"><table class="data-table">
             <thead><tr><th class="num">#</th><th>Team</th><th class="num">Pts</th></tr></thead>
@@ -572,6 +589,26 @@ async function loadMyLeagues() {
               <tr><td class="num">${i + 1}</td><td>${escapeHtml(s.team_name || s.name || '')}</td><td class="num">${s.total_points ?? s.points ?? 0}</td></tr>`).join('')}
             </tbody></table></div>` : ''}
       </div>`).join('')}</div>`;
+}
+
+// Copy-to-clipboard (pre-launch checklist)
+function copyLeagueCode(code) {
+  const done = () => showToast('League code copied', 'success');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(code).then(done).catch(() => fallbackCopy(code, done));
+  } else {
+    fallbackCopy(code, done);
+  }
+}
+function fallbackCopy(text, done) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); done(); } catch (_) { showToast('Copy failed', 'error'); }
+  ta.remove();
 }
 
 async function createLeague(e) {

@@ -6,13 +6,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.database import init_db, init_binds
 from app.scheduler import start_scheduler, shutdown_scheduler
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Pre-launch checklist: verbose API docs are dev-only. Set ENABLE_DOCS=true
+# to expose /docs, /redoc and /openapi.json (never needed in production).
+_ENABLE_DOCS = os.environ.get("ENABLE_DOCS", "").lower() in ("true", "1", "yes")
 
 
 @asynccontextmanager
@@ -32,7 +37,44 @@ app = FastAPI(
     description="FPL-style fantasy football for Isle of Man leagues",
     version="2.0.0",
     lifespan=lifespan,
+    # Pre-launch checklist: no API docs / OpenAPI schema in production
+    docs_url="/docs" if _ENABLE_DOCS else None,
+    redoc_url="/redoc" if _ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if _ENABLE_DOCS else None,
 )
+
+
+# --- Pre-launch checklist: security headers on every response ---
+# CSP: the SPA uses only inline <script> for theme bootstrap and page
+# renderers; no external JS except the Google Fonts CSS (style only, no
+# scripts). Images: self + data: (club badges). Fonts: self + Google Fonts.
+# Connect: self only (all API calls are same-origin /api).
+_SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "strict-origin-when-cross-origin",
+    "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+    "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+    "Content-Security-Policy": (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-ancestors 'none'"
+    ),
+}
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    for name, value in _SECURITY_HEADERS.items():
+        response.headers.setdefault(name, value)
+    return response
 
 # C5: Restrict CORS to the actual frontend origin (was wildcard + credentials)
 _allowed_origin = os.environ.get("APP_BASE_URL", "http://localhost:8000")
@@ -178,11 +220,44 @@ async def help_page(request: Request):
     return _html_response("static/pages/help.html")
 
 
+@app.get("/privacy")
+async def privacy_page(request: Request):
+    return _html_response("static/pages/privacy.html")
+
+
 # --- API health/status ---
 
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "service": "fantasy-football-iom"}
+
+
+# --- Pre-launch checklist: robots.txt + custom 404 ---
+
+@app.get("/robots.txt")
+def robots_txt():
+    return FileResponse(
+        "static/robots.txt",
+        media_type="text/plain",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """Custom 404 for page routes; JSON errors for /api routes."""
+    if exc.status_code == 404 and not request.url.path.startswith("/api"):
+        accept = request.headers.get("accept", "")
+        if "text/html" in accept:
+            return FileResponse(
+                "static/pages/404.html",
+                status_code=404,
+                headers={"Cache-Control": "no-cache"},
+            )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 
 @app.get("/api/gameweeks/current")

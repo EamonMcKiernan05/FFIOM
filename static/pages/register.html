@@ -3,11 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register | Fantasy Football Isle of Man</title>
+    <title>Create your team | Fantasy Football Isle of Man</title>
+    <meta name="description" content="Register for Fantasy Football Isle of Man, pick your 13-player squad and join mini-leagues.">
+    <link rel="canonical" href="https://ffiom.com/register">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Fantasy Football Isle of Man">
+    <meta property="og:title" content="Create your team | Fantasy Football Isle of Man">
+    <meta property="og:description" content="Register for Fantasy Football Isle of Man, pick your 13-player squad and join mini-leagues.">
+    <meta property="og:image" content="https://ffiom.com/static/img/clubs/PremierLeagueIOM.png">
+    <meta property="og:url" content="https://ffiom.com/register">
+    <meta name="twitter:card" content="summary">
     <link rel="icon" href="/static/img/clubs/PremierLeagueIOM.png">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&display=swap">
-    <link rel="stylesheet" href="/static/css/tokens.css?v=20260805">
-    <link rel="stylesheet" href="/static/css/style.css?v=20260805">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=20260819">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260819">
     <script>
         (function () {
             var t = localStorage.getItem('theme');
@@ -20,12 +29,14 @@
     </script>
 </head>
 <body data-page="register">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
     <nav class="game-nav">
         <div class="game-nav__inner">
             <a class="game-nav__brand" href="/">
                 <img class="game-nav__logo" src="/static/img/clubs/PremierLeagueIOM.png" alt="Fantasy Football Isle of Man">
             </a>
-            <button class="nav-toggle" id="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+            <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
             <ul class="game-nav__links" id="nav-links">
                 <li><a class="game-nav__link" href="/">Home</a></li>
                 <li><a class="game-nav__link" href="/my-team">My Team</a></li>
@@ -41,6 +52,7 @@
                 <li><a class="game-nav__link" href="/help">Help</a></li>
             </ul>
             <div class="game-nav__right">
+                <button class="nav-search-btn" id="nav-search-btn" aria-label="Search" title="Search (Ctrl+K)">&#8981;</button>
                 <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
                     <span class="theme-toggle__sun">&#9728;</span><span class="theme-toggle__moon">&#9790;</span>
                 </button>
@@ -49,11 +61,11 @@
         </div>
     </nav>
 
-    <main>
+    <main id="main-content">
         <div class="container">
             <div class="form-card card">
                 <h1 style="margin-bottom:2.4rem">Create your team</h1>
-                <form onsubmit="handleRegister(event)">
+                <form onsubmit="handleRegister(event)" novalidate>
                     <div class="form-field">
                         <label for="reg-username">Username</label>
                         <input id="reg-username" type="text" required autocomplete="username">
@@ -68,8 +80,13 @@
                     </div>
                     <div class="form-field">
                         <label for="reg-password">Password</label>
-                        <input id="reg-password" type="password" required minlength="6" autocomplete="new-password">
+                        <div class="pw-wrap">
+                            <input id="reg-password" type="password" required minlength="10" autocomplete="new-password">
+                            <button type="button" class="pw-toggle" data-pw-toggle="reg-password" aria-label="Show password">Show</button>
+                        </div>
+                        <p class="form-hint">At least 10 characters, with an uppercase letter, a lowercase letter and a number.</p>
                     </div>
+                    <div class="form-error" id="register-error" role="alert" hidden></div>
                     <button class="button button--filled button--full-width" type="submit">Register</button>
                 </form>
                 <p class="form-alt">Already registered? <a href="/login">Sign in</a></p>
@@ -77,7 +94,37 @@
         </div>
     </main>
 
-    <script src="/static/js/app.js?v=20260805"></script>
-    <script src="/static/js/pages.js?v=20260805"></script>
+    <footer class="site-footer">
+        <div class="container site-footer__inner">
+            <div class="site-footer__brand">
+                <strong>Fantasy Football Isle of Man</strong>
+                <span>FPL-style fantasy football for the Isle of Man senior leagues.</span>
+            </div>
+            <nav class="site-footer__links" aria-label="Footer">
+                <a href="/help">Help &amp; rules</a>
+                <a href="/players">Players</a>
+                <a href="/fixtures">Fixtures</a>
+                <a href="/leaderboard">Leaderboard</a>
+                <a href="/privacy">Privacy policy</a>
+                <a href="https://fulltime.thefa.com" target="_blank" rel="noopener">IOM FA FullTime</a>
+            </nav>
+            <div class="site-footer__copy">&copy; <span id="footer-year">2026</span> Fantasy Football IOM. Not affiliated with the Premier League or the FA.</div>
+        </div>
+    </footer>
+
+    <button class="back-to-top" id="back-to-top" aria-label="Back to top">&uarr;</button>
+
+    <div class="cookie-banner" id="cookie-banner" hidden>
+        <div class="cookie-banner__inner">
+            <p>FFIOM stores your login session and theme preference on this device (local storage and strictly necessary cookies). No tracking or advertising cookies are used.</p>
+            <div class="cookie-banner__actions">
+                <a href="/privacy">Privacy policy</a>
+                <button class="button button--accent button--small" id="cookie-accept">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=20260819"></script>
+    <script src="/static/js/pages.js?v=20260819"></script>
 </body>
 </html>

@@ -4,10 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fantasy Football Isle of Man</title>
+    <meta name="description" content="Build your dream team from the Isle of Man senior leagues. Pick 13 players, captain your best, and compete in mini-leagues. Free to play.">
+    <link rel="canonical" href="https://ffiom.com/">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Fantasy Football Isle of Man">
+    <meta property="og:title" content="Fantasy Football Isle of Man">
+    <meta property="og:description" content="FPL-style fantasy football for the Isle of Man senior leagues. Pick 13 players, captain your best, compete in mini-leagues.">
+    <meta property="og:image" content="https://ffiom.com/static/img/clubs/PremierLeagueIOM.png">
+    <meta property="og:url" content="https://ffiom.com/">
+    <meta name="twitter:card" content="summary">
     <link rel="icon" href="/static/img/clubs/PremierLeagueIOM.png">
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700;800&display=swap">
-    <link rel="stylesheet" href="/static/css/tokens.css?v=20260805">
-    <link rel="stylesheet" href="/static/css/style.css?v=20260805">
+    <link rel="stylesheet" href="/static/css/tokens.css?v=20260819">
+    <link rel="stylesheet" href="/static/css/style.css?v=20260819">
     <script>
         (function () {
             var t = localStorage.getItem('theme');
@@ -18,14 +27,25 @@
             document.documentElement.classList.add(t);
         })();
     </script>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Fantasy Football Isle of Man",
+      "url": "https://ffiom.com/",
+      "description": "FPL-style fantasy football game for the Isle of Man senior football leagues."
+    }
+    </script>
 </head>
 <body data-page="home">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+    <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
     <nav class="game-nav">
         <div class="game-nav__inner">
             <a class="game-nav__brand" href="/">
                 <img class="game-nav__logo" src="/static/img/clubs/PremierLeagueIOM.png" alt="Fantasy Football Isle of Man">
             </a>
-            <button class="nav-toggle" id="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
+            <button class="nav-toggle" id="nav-toggle" aria-label="Menu" aria-expanded="false"><span></span><span></span><span></span></button>
             <ul class="game-nav__links" id="nav-links">
                 <li><a class="game-nav__link is-active" href="/">Home</a></li>
                 <li><a class="game-nav__link" href="/my-team">My Team</a></li>
@@ -41,6 +61,7 @@
                 <li><a class="game-nav__link" href="/help">Help</a></li>
             </ul>
             <div class="game-nav__right">
+                <button class="nav-search-btn" id="nav-search-btn" aria-label="Search" title="Search (Ctrl+K)">&#8981;</button>
                 <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
                     <span class="theme-toggle__sun">&#9728;</span><span class="theme-toggle__moon">&#9790;</span>
                 </button>
@@ -57,10 +78,11 @@
                 <a href="/register" class="button button--accent">Create your team</a>
                 <a href="/players" class="button button--outlined">Browse players</a>
             </div>
+            <p class="hero__promise">Free to play &middot; Fixtures and stats synced from official IOM FA FullTime data &middot; New gameweek every Saturday</p>
         </div>
     </header>
 
-    <main>
+    <main id="main-content">
         <div class="container">
             <div id="gw-banner"></div>
             <div id="home-stats" style="margin-top:2.4rem"></div>
@@ -68,7 +90,37 @@
         </div>
     </main>
 
-    <script src="/static/js/app.js?v=20260805"></script>
-    <script src="/static/js/pages.js?v=20260805"></script>
+    <footer class="site-footer">
+        <div class="container site-footer__inner">
+            <div class="site-footer__brand">
+                <strong>Fantasy Football Isle of Man</strong>
+                <span>FPL-style fantasy football for the Isle of Man senior leagues.</span>
+            </div>
+            <nav class="site-footer__links" aria-label="Footer">
+                <a href="/help">Help &amp; rules</a>
+                <a href="/players">Players</a>
+                <a href="/fixtures">Fixtures</a>
+                <a href="/leaderboard">Leaderboard</a>
+                <a href="/privacy">Privacy policy</a>
+                <a href="https://fulltime.thefa.com" target="_blank" rel="noopener">IOM FA FullTime</a>
+            </nav>
+            <div class="site-footer__copy">&copy; <span id="footer-year">2026</span> Fantasy Football IOM. Not affiliated with the Premier League or the FA.</div>
+        </div>
+    </footer>
+
+    <button class="back-to-top" id="back-to-top" aria-label="Back to top">&uarr;</button>
+
+    <div class="cookie-banner" id="cookie-banner" hidden>
+        <div class="cookie-banner__inner">
+            <p>FFIOM stores your login session and theme preference on this device (local storage and strictly necessary cookies). No tracking or advertising cookies are used.</p>
+            <div class="cookie-banner__actions">
+                <a href="/privacy">Privacy policy</a>
+                <button class="button button--accent button--small" id="cookie-accept">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=20260819"></script>
+    <script src="/static/js/pages.js?v=20260819"></script>
 </body>
 </html>

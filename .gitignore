@@ -16,3 +16,8 @@ data/
 
 # Local-only compose overrides
 compose.override.yaml
+
+# Local test environments (pre-launch checklist work)
+.venv-plc/
+.env.local-test
+_start_plc_test.sh

@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /my-team
+Disallow: /transfers
+Disallow: /leagues
+Disallow: /history
+
+# FFIOM — fantasy football for the Isle of Man leagues
+# https://ffiom.com
