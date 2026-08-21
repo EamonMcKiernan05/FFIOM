@@ -467,7 +467,40 @@ function tfClearAll() {
   showToast('Transfer list cleared', 'info');
 }
 
-async function tfConfirmAll() {
+function tfConfirmAll() {
+  if (!T.pending.length) return;
+  const rows = T.pending.map((p) => {
+    const out = p.out ? escapeHtml(p.out.name) : 'Empty slot';
+    const inn = p.in ? escapeHtml(p.in.name) : 'No replacement';
+    const net = (p.in ? p.in.price : 0) - (p.out ? p.out.sell : 0);
+    return `<div class="tf-pending__row" style="margin-bottom:0.8rem">
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <span>${out} &rarr; ${inn}</span>
+        <strong style="color:${net > 0 ? 'var(--c-system-error)' : 'var(--c-system-success)'}">${net > 0 ? '+' : net < 0 ? '-' : ''}&pound;${Math.abs(net).toFixed(1)}m</strong>
+      </div>
+    </div>`;
+  }).join('');
+  const netGain = pendingNet();
+  const bank = bankAfterPending();
+  openModal(`
+    <h3 style="margin-bottom:0.4rem">Confirm all transfers</h3>
+    <p style="color:var(--theme-on-surface-variant);margin-bottom:1.2rem">
+      You are about to finalise <strong>${T.pending.length}</strong> transfer${T.pending.length > 1 ? 's' : ''}.
+      This cannot be undone from this page.
+    </p>
+    <div style="margin-bottom:1.2rem">${rows}</div>
+    <p style="color:var(--theme-on-surface-variant);margin-bottom:1.6rem">
+      Bank after transfers: <strong style="color:var(--theme-on-surface)">&pound;${bank.toFixed(1)}m</strong>
+      ${netGain ? ` &middot; net ${netGain <= 0 ? '+' : '-'}&pound;${Math.abs(netGain).toFixed(1)}m` : ''}
+    </p>
+    <div style="display:flex;gap:0.8rem;justify-content:flex-end;flex-wrap:wrap">
+      <button class="button button--text" onclick="closeModal()">Cancel</button>
+      <button class="button button--accent" onclick="tfConfirmAllExecute()">Confirm transfers</button>
+    </div>
+  `);
+}
+
+async function tfConfirmAllExecute() {
   if (!T.pending.length) return;
   const ops = T.pending.map((p) => ({
     player_out_id: p.out ? p.out.player_id : null,
@@ -478,6 +511,7 @@ async function tfConfirmAll() {
       method: 'POST',
       body: JSON.stringify({ pending_transfers: ops }),
     });
+    closeModal();
     showToast(`Transfers confirmed (${res.transfers_applied})${res.points_hit ? ' — -' + res.points_hit + ' pts hit' : ''}`, 'success');
     T.pending = [];
     await loadMe();
