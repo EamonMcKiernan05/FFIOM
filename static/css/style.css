@@ -213,6 +213,52 @@ html.dark-theme .theme-toggle__sun { display: none; }
 .pitch-player__c { background: var(--c-pl-yellow); color: var(--c-pl-purple); }
 .pitch-player__vc { background: var(--c-mono-p30); color: var(--c-pl-purple); }
 
+/* --- Transfers: 13-player pitch (5-5-3) --- */
+.pitch--13 { gap: var(--space-m); }
+.pitch--13 .pitch__row { gap: var(--space-s); }
+.pitch--13 .pitch-player { width: 8rem; }
+.pitch--13 .pitch-player__shirt { width: 4.4rem; height: 4.4rem; }
+
+.pitch-player__shirt--empty {
+  border: 0.2rem dashed var(--theme-outline);
+  background: transparent; color: var(--theme-on-surface-variant);
+  font-size: 2rem; font-weight: 700;
+}
+.pitch-player__name--empty {
+  background: transparent; color: var(--theme-on-surface-variant);
+  font-weight: 600;
+}
+
+/* Pending slot: outgoing player (faded) -> incoming player (highlighted) */
+.pitch-slot {
+  display: flex; align-items: center; gap: 0.4rem;
+  cursor: pointer; position: relative;
+}
+.pitch-slot .pitch-player { width: 7.6rem; }
+.pitch-slot .pitch-player__shirt { width: 4rem; height: 4rem; }
+.pitch-slot__arrow { font-size: 1.6rem; color: var(--theme-on-surface-variant); font-weight: 700; }
+.pitch-player.is-pending-out { opacity: 0.45; }
+.pitch-player.is-pending-out .pitch-player__name { text-decoration: line-through; }
+.pitch-player.is-pending-in .pitch-player__name { background: var(--c-pl-green); color: var(--c-pl-purple); font-weight: 700; }
+
+/* Pending transfers list */
+.tf-pending__row {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  flex-wrap: wrap; padding: var(--space-s) 0;
+  border-bottom: 0.1rem solid var(--theme-outline-variant);
+}
+.tf-pending__row:last-child { border-bottom: 0; }
+
+/* Market modal (larger sheet) */
+.modal--market { max-width: 84rem; }
+.tf-market__row { cursor: pointer; }
+.tf-market__row.is-disabled { opacity: 0.45; cursor: default; }
+.tf-market__row.is-selected { background: var(--theme-primary-container); }
+.tf-market__footer {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  flex-wrap: wrap; margin-top: var(--space-m);
+}
+
 /* ===== CHIPS (wildcard etc) ===== */
 .chip-row { display: flex; gap: var(--space-s); flex-wrap: wrap; }
 .chip-button {

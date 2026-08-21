@@ -224,109 +224,412 @@ async function toggleChip(chipType, isActive) {
 }
 
 /* ---------- TRANSFERS ---------- */
-let transferPlayers = [];
-let selectedIn = null;
-let selectedOut = null;
+/*
+ * Transfers page: 13-player pitch in a 5-5-3 formation.
+ * Clicking a player (or an empty slot) opens a small player modal with
+ * Replace / Remove player (or Add player for empty slots). Replace and Add
+ * open a larger market modal with club / max-price / budget filters and
+ * price / points / club / name sorting. A pick must be confirmed in the
+ * market modal before returning to the page. Nothing is final until
+ * "Confirm all transfers" is pressed on the main page.
+ */
+const T = {
+  players: [],   // full market from /players/
+  layout: [],    // 13 slots, each a squad entry or null
+  pending: [],   // {slot, out: entry|null, in: {player_id,name,team_name,price,total_points}|null}
+  market: null,  // {slot, out: entry|null, selectedId}
+};
+const TF_ROWS = [5, 5, 3];
 
 async function renderTransfers() {
   const root = document.getElementById('transfers-root');
   if (!requireAuth('Transfers')) return;
+  root.innerHTML = '<div class="loading">Loading transfer market&hellip;</div>';
+  const [players, squad] = await Promise.all([
+    apiJson('/players/?order_by=points'),
+    apiJson('/users/squad').catch(() => []),
+  ]);
+  T.players = players;
+  T.layout = buildTransferLayout(squad);
+  renderTransfersPage();
+}
 
-  root.innerHTML = `
-    <div class="gw-banner" id="transfer-status"><div class="loading">Loading&hellip;</div></div>
-    <div class="card-grid--2 card-grid" style="margin-top:2.4rem">
-      <div class="card">
-        <h3 class="card__title">Transfer in</h3>
-        <div class="filters">
-          <input id="ti-search" type="search" placeholder="Search players&hellip;" oninput="filterTransferIn()">
-        </div>
-        <div class="table-wrap" style="max-height:48rem;overflow-y:auto">
-          <table class="data-table" id="ti-table"><thead><tr><th>Player</th><th class="num">Pts</th><th class="num">Price</th><th></th></tr></thead><tbody></tbody></table>
+function squadEntry(s) {
+  return {
+    id: s.id,
+    player_id: s.player_id,
+    name: (s.player && s.player.name) || s.name || 'Unknown',
+    team_name: (s.player && s.player.team && s.player.team.name) || '',
+    team_id: s.player ? s.player.team_id : null,
+    price: (s.player && s.player.price) ?? 0,
+    sell: s.selling_price ?? s.purchase_price ?? (s.player && s.player.price) ?? 0,
+    gw_points: s.gw_points ?? 0,
+    total_points: s.total_points ?? 0,
+    is_captain: !!s.is_captain,
+    is_vice_captain: !!s.is_vice_captain,
+    is_starting: s.is_starting !== false,
+    position_slot: s.position_slot ?? 99,
+  };
+}
+
+function buildTransferLayout(squad) {
+  const entries = squad.map(squadEntry).sort((a, b) => a.position_slot - b.position_slot);
+  const layout = new Array(13).fill(null);
+  entries.slice(0, 13).forEach((e, i) => { layout[i] = e; });
+  return layout;
+}
+
+function pendingForSlot(slot) { return T.pending.find((p) => p.slot === slot); }
+function pendingInIds() { return new Set(T.pending.filter((p) => p.in).map((p) => p.in.player_id)); }
+function pendingNet() {
+  let n = 0;
+  for (const p of T.pending) { if (p.out) n += p.out.sell; if (p.in) n -= p.in.price; }
+  return Math.round(n * 10) / 10;
+}
+function bankAfterPending() {
+  if (!currentTeam) return 0;
+  return Math.round(((currentTeam.budget_remaining ?? currentTeam.bank ?? 0) + pendingNet()) * 10) / 10;
+}
+/* Budget available for a new pick at a slot: bank + pending sells - pending buys
+   (bankAfterPending), plus what the pick itself frees up.
+   - pending op with a replacement: the new pick supersedes that buy -> add its price back
+   - pending op without a replacement: the sell is already in bankAfterPending -> add nothing
+   - no pending op, player on the pitch: the sell is not in bankAfterPending yet -> add it
+   - empty slot: nothing freed */
+function budgetForPick(slot) {
+  const p = pendingForSlot(slot);
+  let freed = 0;
+  if (p) {
+    if (p.in) freed = p.in.price;
+  } else if (T.layout[slot]) {
+    freed = T.layout[slot].sell;
+  }
+  return Math.round((bankAfterPending() + freed) * 10) / 10;
+}
+
+function renderTransfersPage() {
+  const root = document.getElementById('transfers-root');
+  const bank = bankAfterPending();
+  const squadCount = T.layout.filter(Boolean).length;
+  const netGain = pendingNet();
+
+  let html = `
+    <div class="gw-banner">
+      <div><strong>${escapeHtml(currentTeam ? currentTeam.name : 'No team')}</strong>
+        <div style="font-size:1.4rem;color:var(--theme-on-surface-variant)">
+          Bank: &pound;${(currentTeam ? (currentTeam.budget_remaining ?? currentTeam.bank ?? 0) : 0).toFixed(1)}m
+          ${T.pending.length ? ` &rarr; &pound;${bank.toFixed(1)}m with transfers` : ''}
+          &middot; Squad: ${squadCount}/13
         </div>
       </div>
-      <div class="card">
-        <h3 class="card__title">Your squad &mdash; transfer out</h3>
-        <div class="table-wrap" style="max-height:48rem;overflow-y:auto">
-          <table class="data-table" id="to-table"><thead><tr><th>Player</th><th class="num">Price</th><th></th></tr></thead><tbody></tbody></table>
+      ${T.pending.length ? `<div style="font-size:1.4rem;color:var(--theme-on-surface-variant)">${T.pending.length} pending &middot; net ${netGain <= 0 ? '+' : '-'}&pound;${Math.abs(netGain).toFixed(1)}m</div>` : ''}
+    </div>`;
+
+  if (T.pending.length) {
+    html += `
+    <div class="card tf-pending" style="margin-top:2.4rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.2rem">
+        <h3 class="card__title" style="margin-bottom:0">Pending transfers</h3>
+        <div style="display:flex;gap:0.8rem;flex-wrap:wrap">
+          <button class="button button--text button--small" onclick="tfClearAll()">Clear all</button>
+          <button class="button button--accent button--small" onclick="tfConfirmAll()">Confirm all transfers</button>
         </div>
       </div>
+      ${T.pending.map((p) => tfPendingRowHtml(p)).join('')}
+    </div>`;
+  }
+
+  html += `
+    <h2 style="margin:2.4rem 0 1.6rem">Your squad</h2>
+    <div class="pitch pitch--13">
+      ${TF_ROWS.map((n, r) => `<div class="pitch__row">${Array.from({ length: n }, (_, i) => tfSlotHtml(r * 5 + i)).join('')}</div>`).join('')}
     </div>
-    <div id="transfer-confirm" style="margin-top:2.4rem"></div>`;
+    <p style="margin-top:1.6rem;font-size:1.4rem;color:var(--theme-on-surface-variant)">
+      Tap a player to replace or remove them, or tap an empty slot to add a player.
+      Transfers are only final once you press <strong>Confirm all transfers</strong>.
+    </p>`;
 
-  transferPlayers = await apiJson('/players/?order_by=points');
-  filterTransferIn();
+  root.innerHTML = html;
+}
 
-  if (currentTeam) {
-    const squad = await apiJson('/users/squad').catch(() => []);
-    const tb = document.querySelector('#to-table tbody');
-    tb.innerHTML = squad.map((s) => {
-      const name = (s.player && s.player.name) || s.name || 'Unknown';
-      const price = s.selling_price ?? s.purchase_price ?? (s.player && s.player.price) ?? 0;
-      return `
-      <tr>
-        <td>${escapeHtml(name)}</td>
-        <td class="num">&pound;${price.toFixed(1)}m</td>
-        <td class="num"><button class="button button--outlined button--small" onclick="pickOut(${s.player_id}, '${escapeHtml(name).replace(/'/g, "\\'")}', ${price})">Out</button></td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="3">No squad yet &mdash; pick players on the left.</td></tr>';
-    document.getElementById('transfer-status').innerHTML = `
-      <div><strong>${escapeHtml(currentTeam.name)}</strong>
-      <div style="font-size:1.4rem;color:var(--theme-on-surface-variant)">Bank: &pound;${(currentTeam.budget_remaining ?? currentTeam.bank ?? 0).toFixed(1)}m &middot; Squad: ${squad.length}/13</div></div>`;
-  } else {
-    document.getElementById('transfer-status').innerHTML = '<div>Create your team by selecting players.</div>';
+function tfPendingRowHtml(p) {
+  const out = p.out
+    ? `<span class="team-cell">${clubLogo(p.out.team_name, 'club-badge club-badge--small')}<span>${escapeHtml(p.out.name)} &mdash; out for &pound;${p.out.sell.toFixed(1)}m</span></span>`
+    : '<span style="color:var(--theme-on-surface-variant)">Empty slot</span>';
+  const inn = p.in
+    ? `<span class="team-cell">${clubLogo(p.in.team_name, 'club-badge club-badge--small')}<span>${escapeHtml(p.in.name)} &mdash; in for &pound;${p.in.price.toFixed(1)}m</span></span>`
+    : '<span style="color:var(--theme-on-surface-variant)">No replacement yet</span>';
+  const net = (p.in ? p.in.price : 0) - (p.out ? p.out.sell : 0);
+  return `
+    <div class="tf-pending__row">
+      <div style="display:flex;align-items:center;gap:1.2rem;flex-wrap:wrap">
+        ${out} <span aria-hidden="true">&rarr;</span> ${inn}
+        <strong class="tf-pending__net" style="color:${net > 0 ? 'var(--c-system-error)' : 'var(--c-system-success)'}">${net > 0 ? '+' : net < 0 ? '-' : ''}&pound;${Math.abs(net).toFixed(1)}m</strong>
+      </div>
+      <button class="button button--text button--small" onclick="tfRemovePending(${p.slot})">&times; Remove from list</button>
+    </div>`;
+}
+
+function tfSlotHtml(i) {
+  const e = T.layout[i];
+  const p = pendingForSlot(i);
+  if (p) {
+    const outHtml = p.out
+      ? `<div class="pitch-player is-pending-out">
+          <div class="pitch-player__shirt">${clubLogo(p.out.team_name, '')}</div>
+          <div class="pitch-player__name">${escapeHtml(p.out.name)}</div>
+          <div class="pitch-player__pts">out</div>
+        </div>`
+      : `<div class="pitch-player is-pending-out"><div class="pitch-player__shirt pitch-player__shirt--empty">&mdash;</div><div class="pitch-player__name pitch-player__name--empty">empty</div></div>`;
+    const inHtml = p.in
+      ? `<div class="pitch-player is-pending-in">
+          <div class="pitch-player__shirt">${clubLogo(p.in.team_name, '')}</div>
+          <div class="pitch-player__name">${escapeHtml(p.in.name)}</div>
+          <div class="pitch-player__pts">&pound;${p.in.price.toFixed(1)}m</div>
+        </div>`
+      : '';
+    return `<div class="pitch-slot" onclick="tfOpenSlot(${i})">${outHtml}<div class="pitch-slot__arrow" aria-hidden="true">&rarr;</div>${inHtml}</div>`;
+  }
+  if (e) {
+    const badge = e.is_captain ? '<span class="pitch-player__c">C</span>'
+      : e.is_vice_captain ? '<span class="pitch-player__vc">V</span>' : '';
+    return `
+    <div class="pitch-player" onclick="tfOpenSlot(${i})">
+      ${badge}
+      <div class="pitch-player__shirt">${clubLogo(e.team_name, '')}</div>
+      <div class="pitch-player__name">${escapeHtml(e.name)}</div>
+      <div class="pitch-player__pts">${e.gw_points} pts</div>
+    </div>`;
+  }
+  return `
+  <div class="pitch-player" onclick="tfOpenSlot(${i})">
+    <div class="pitch-player__shirt pitch-player__shirt--empty">+</div>
+    <div class="pitch-player__name pitch-player__name--empty">Add player</div>
+  </div>`;
+}
+
+/* --- Small player modal --- */
+function tfOpenSlot(i) {
+  const e = T.layout[i];
+  const p = pendingForSlot(i);
+  if (p) {
+    const inn = p.in ? `${escapeHtml(p.in.name)} (&pound;${p.in.price.toFixed(1)}m)` : 'no replacement yet';
+    const outt = p.out ? `${escapeHtml(p.out.name)} out for &pound;${p.out.sell.toFixed(1)}m` : 'empty slot';
+    openModal(`
+      <h3 style="margin-bottom:0.8rem">Pending transfer</h3>
+      <p style="margin-bottom:1.6rem">${outt} &rarr; ${inn}</p>
+      <div style="display:flex;flex-direction:column;gap:0.8rem">
+        <button class="button button--filled" onclick="tfOpenMarket(${i})">Change replacement</button>
+        <button class="button button--outlined" onclick="tfRemovePending(${i})">Remove from list</button>
+      </div>`);
+    return;
+  }
+  if (!e) {
+    openModal(`
+      <h3 style="margin-bottom:0.8rem">Empty slot</h3>
+      <p style="margin-bottom:1.6rem;color:var(--theme-on-surface-variant)">Pick a player to fill this slot.</p>
+      <div style="display:flex;flex-direction:column;gap:0.8rem">
+        <button class="button button--filled" onclick="tfOpenMarket(${i})">Add player</button>
+      </div>`);
+    return;
+  }
+  const badge = e.is_captain ? ' &middot; Captain' : e.is_vice_captain ? ' &middot; Vice-captain' : '';
+  openModal(`
+    <h3 style="margin-bottom:0.4rem">${escapeHtml(e.name)}${badge}</h3>
+    <p style="color:var(--theme-on-surface-variant);margin-bottom:1.6rem">
+      <span class="team-cell">${clubLogo(e.team_name, 'club-badge club-badge--small')}${escapeHtml(e.team_name)}</span>
+      &nbsp; &pound;${e.price.toFixed(1)}m &middot; ${e.total_points} pts this season &middot; sells for &pound;${e.sell.toFixed(1)}m
+    </p>
+    <div style="display:flex;flex-direction:column;gap:0.8rem">
+      <button class="button button--filled" onclick="tfOpenMarket(${i})">Replace</button>
+      <button class="button button--outlined" onclick="tfRemoveSlot(${i})">Remove player</button>
+    </div>`);
+}
+
+function tfRemoveSlot(i) {
+  const e = T.layout[i];
+  if (!e) return;
+  T.pending.push({ slot: i, out: e, in: null });
+  closeModal();
+  renderTransfersPage();
+  showToast(`${e.name} removed — pick a replacement or confirm all transfers`, 'info');
+}
+
+function tfRemovePending(slot) {
+  T.pending = T.pending.filter((p) => p.slot !== slot);
+  closeModal();
+  renderTransfersPage();
+}
+
+function tfClearAll() {
+  T.pending = [];
+  renderTransfersPage();
+  showToast('Transfer list cleared', 'info');
+}
+
+async function tfConfirmAll() {
+  if (!T.pending.length) return;
+  const ops = T.pending.map((p) => ({
+    player_out_id: p.out ? p.out.player_id : null,
+    player_in_id: p.in ? p.in.player_id : null,
+  }));
+  try {
+    const res = await apiJson('/transfers/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ pending_transfers: ops }),
+    });
+    showToast(`Transfers confirmed (${res.transfers_applied})${res.points_hit ? ' — -' + res.points_hit + ' pts hit' : ''}`, 'success');
+    T.pending = [];
+    await loadMe();
+    await renderTransfers();
+  } catch (e) {
+    showToast(e.message, 'error');
   }
 }
 
-function filterTransferIn() {
-  const q = (document.getElementById('ti-search').value || '').toLowerCase();
-  const rows = transferPlayers
-    .filter((p) => !q || p.name.toLowerCase().includes(q))
-    .slice(0, 60);
-  document.querySelector('#ti-table tbody').innerHTML = rows.map((p) => `
-    <tr>
-      <td><div style="display:flex;align-items:center;gap:0.8rem">${clubLogo(p.team && p.team.name, 'club-badge club-badge--small')}<div>${escapeHtml(p.name)}<div style="font-size:1.2rem;color:var(--theme-on-surface-variant)">${escapeHtml(p.team ? p.team.name : '')}</div></div></div></td>
-      <td class="num">${p.total_points}</td>
-      <td class="num">&pound;${p.price.toFixed(1)}m</td>
-      <td class="num"><button class="button button--filled button--small" onclick="pickIn(${p.id}, '${escapeHtml(p.name).replace(/'/g, "\\'")}', ${p.price})">In</button></td>
-    </tr>`).join('');
+/* --- Large market modal --- */
+function tfOpenMarket(i) {
+  T.market = { slot: i, out: T.layout[i] || null, selectedId: null, club: '', maxPrice: '', onlyAffordable: false, sort: 'points' };
+  renderMarketModal();
 }
 
-function pickIn(id, name, price) { selectedIn = { id, name, price }; renderTransferConfirm(); }
-function pickOut(id, name, price) { selectedOut = { id, name, price }; renderTransferConfirm(); }
-
-function renderTransferConfirm() {
-  const el = document.getElementById('transfer-confirm');
-  if (!selectedIn) { el.innerHTML = ''; return; }
-  el.innerHTML = `
-    <div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:1.6rem;flex-wrap:wrap">
-      <div>
-        <strong>IN:</strong> ${escapeHtml(selectedIn.name)} (&pound;${selectedIn.price.toFixed(1)}m)
-        ${selectedOut ? ` &nbsp;&rarr;&nbsp; <strong>OUT:</strong> ${escapeHtml(selectedOut.name)} (&pound;${selectedOut.price.toFixed(1)}m)` : ''}
-      </div>
-      <div style="display:flex;gap:0.8rem">
-        <button class="button button--outlined button--small" onclick="clearTransfer()">Clear</button>
-        <button class="button button--accent button--small" onclick="confirmTransfer()">Confirm transfer</button>
-      </div>
-    </div>`;
+function tfMarketFiltered() {
+  const m = T.market;
+  const squadIds = new Set(T.layout.filter(Boolean).map((e) => e.player_id));
+  const outIds = pendingInIds();
+  const budget = budgetForPick(m.slot);
+  let rows = T.players.filter((p) => {
+    if (m.club && !(p.team && p.team.name === m.club)) return false;
+    if (m.maxPrice && p.price > parseFloat(m.maxPrice)) return false;
+    if (m.onlyAffordable && p.price > budget) return false;
+    return true;
+  });
+  const cmp = {
+    price_desc: (a, b) => b.price - a.price,
+    price_asc: (a, b) => a.price - b.price,
+    points: (a, b) => (b.total_points || 0) - (a.total_points || 0),
+    club: (a, b) => ((a.team && a.team.name) || '').localeCompare((b.team && b.team.name) || ''),
+    name: (a, b) => a.name.localeCompare(b.name),
+  }[m.sort] || ((a, b) => 0);
+  rows = rows.slice().sort(cmp);
+  return rows.map((p) => {
+    const inSquad = squadIds.has(p.id) && !(m.out && m.out.player_id === p.id);
+    const isSelf = !!(m.out && m.out.player_id === p.id);
+    const isPending = outIds.has(p.id);
+    return { p, inSquad, isSelf, isPending, disabled: inSquad || isSelf || isPending };
+  });
 }
-function clearTransfer() { selectedIn = selectedOut = null; renderTransferConfirm(); }
 
-async function confirmTransfer() {
-  if (!selectedIn) return;
-  if (!currentTeam) { showToast('Create a team first', 'error'); return; }
-  try {
-    await apiJson('/transfers/player', {
-      method: 'POST',
-      body: JSON.stringify({
-        player_in_id: selectedIn.id,
-        player_out_id: selectedOut ? selectedOut.id : null,
-      }),
-    });
-    showToast('Transfer confirmed', 'success');
-    selectedIn = selectedOut = null;
-    await loadMe();
-    renderTransfers();
-  } catch (e) { showToast(e.message, 'error'); }
+function renderMarketModal() {
+  const m = T.market;
+  const rows = tfMarketFiltered();
+  const budget = budgetForPick(m.slot);
+  const clubs = [...new Set(T.players.map((p) => p.team && p.team.name).filter(Boolean))].sort();
+  const prices = [];
+  for (let v = 5.0; v <= 15.5; v += 0.5) prices.push(Math.round(v * 10) / 10);
+  const sel = T.players.find((p) => p.id === m.selectedId);
+
+  const title = m.out ? `Replace ${escapeHtml(m.out.name)}` : 'Add player';
+  const sub = m.out
+    ? `Selling ${escapeHtml(m.out.name)} for &pound;${m.out.sell.toFixed(1)}m`
+    : 'Filling an empty slot';
+
+  openModal(`
+    <h3 style="margin-bottom:0.4rem">${title}</h3>
+    <p style="color:var(--theme-on-surface-variant);margin-bottom:1.6rem">
+      ${sub} &middot; Budget available: <strong style="color:var(--theme-on-surface)">&pound;${budget.toFixed(1)}m</strong>
+    </p>
+    <div class="filters">
+      <select id="tfm-club" onchange="tfMarketSet('club', this.value)">
+        <option value="">All clubs</option>
+        ${clubs.map((c) => `<option value="${escapeHtml(c)}" ${m.club === c ? 'selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+      </select>
+      <select id="tfm-maxprice" onchange="tfMarketSet('maxPrice', this.value)">
+        <option value="">Any price</option>
+        ${prices.map((v) => `<option value="${v}" ${m.maxPrice === String(v) ? 'selected' : ''}>&le; &pound;${v.toFixed(1)}m</option>`).join('')}
+      </select>
+      <label style="display:flex;align-items:center;gap:0.6rem;font-size:1.4rem;cursor:pointer">
+        <input type="checkbox" ${m.onlyAffordable ? 'checked' : ''} onchange="tfMarketSet('onlyAffordable', this.checked)">
+        Only players I can afford
+      </label>
+      <select id="tfm-sort" onchange="tfMarketSet('sort', this.value)">
+        <option value="points" ${m.sort === 'points' ? 'selected' : ''}>Sort: Points</option>
+        <option value="price_desc" ${m.sort === 'price_desc' ? 'selected' : ''}>Sort: Price (high to low)</option>
+        <option value="price_asc" ${m.sort === 'price_asc' ? 'selected' : ''}>Sort: Price (low to high)</option>
+        <option value="club" ${m.sort === 'club' ? 'selected' : ''}>Sort: Club (A&ndash;Z)</option>
+        <option value="name" ${m.sort === 'name' ? 'selected' : ''}>Sort: Name (A&ndash;Z)</option>
+      </select>
+    </div>
+    <div class="table-wrap" style="max-height:48rem;overflow-y:auto">
+      <table class="data-table">
+        <thead><tr><th>Player</th><th>Club</th><th class="num">Pts</th><th class="num">Price</th><th class="num"></th></tr></thead>
+        <tbody>
+          ${rows.map(({ p, inSquad, isSelf, isPending, disabled }) => `
+            <tr class="tf-market__row ${disabled ? 'is-disabled' : ''} ${m.selectedId === p.id ? 'is-selected' : ''}"
+                ${disabled ? '' : `onclick="tfMarketPick(${p.id})"`}>
+              <td><span class="team-cell">${clubLogo(p.team && p.team.name, 'club-badge club-badge--small')}${escapeHtml(p.name)}</span></td>
+              <td>${escapeHtml(p.team ? p.team.name : '')}</td>
+              <td class="num">${p.total_points}</td>
+              <td class="num">&pound;${p.price.toFixed(1)}m</td>
+              <td class="num">
+                ${m.selectedId === p.id ? '<span class="badge badge--live">Selected</span>'
+                  : disabled ? (isSelf ? '<span style="font-size:1.2rem;color:var(--theme-on-surface-variant)">Being replaced</span>'
+                    : inSquad ? '<span style="font-size:1.2rem;color:var(--theme-on-surface-variant)">In your squad</span>'
+                    : '<span style="font-size:1.2rem;color:var(--theme-on-surface-variant)">Pending</span>')
+                  : '<span style="font-size:1.2rem;color:var(--theme-on-surface-variant)">&rarr;</span>'}
+              </td>
+            </tr>`).join('') || '<tr><td colspan="5">No players match these filters.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+    <div class="tf-market__footer">
+      ${sel
+        ? `<div style="font-size:1.4rem">Selected: <strong>${escapeHtml(sel.name)}</strong> &mdash; &pound;${sel.price.toFixed(1)}m
+             ${m.out ? `&middot; net ${sel.price - m.out.sell >= 0 ? '+' : '-'}&pound;${Math.abs(sel.price - m.out.sell).toFixed(1)}m` : ''}</div>
+           <div style="display:flex;gap:0.8rem">
+             <button class="button button--outlined button--small" onclick="tfMarketSet('selectedId', null)">Back</button>
+             <button class="button button--accent button--small" onclick="tfMarketConfirm()">Confirm ${escapeHtml(sel.name)}</button>
+           </div>`
+        : '<div style="font-size:1.4rem;color:var(--theme-on-surface-variant)">Select a player, then confirm your choice.</div>'}
+    </div>`);
+  const sheet = document.getElementById('modal-sheet');
+  if (sheet) sheet.classList.add('modal--market');
+}
+
+function tfMarketSet(key, value) {
+  if (!T.market) return;
+  T.market[key] = value;
+  if (key === 'selectedId') T.market.selectedId = value;
+  renderMarketModal();
+}
+
+function tfMarketPick(playerId) {
+  if (!T.market) return;
+  T.market.selectedId = playerId;
+  renderMarketModal();
+}
+
+function tfMarketConfirm() {
+  const m = T.market;
+  const p = T.players.find((x) => x.id === m.selectedId);
+  if (!p) return;
+  const entry = {
+    player_id: p.id,
+    name: p.name,
+    team_name: p.team ? p.team.name : '',
+    price: p.price,
+    total_points: p.total_points,
+  };
+  const existing = pendingForSlot(m.slot);
+  if (existing) {
+    existing.in = entry;
+  } else {
+    T.pending.push({ slot: m.slot, out: m.out, in: entry });
+  }
+  T.market = null;
+  closeModal();
+  renderTransfersPage();
+  showToast(`${entry.name} added to your transfer list — press "Confirm all transfers" to finalise`, 'success');
 }
 
 /* ---------- PLAYERS ---------- */
