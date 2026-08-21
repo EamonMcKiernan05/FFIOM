@@ -316,6 +316,11 @@ def confirm_transfers(
     squad_size = len(squad) - len(out_ids) + len(in_ids)
     if squad_size > SQUAD_LIMIT:
         raise HTTPException(status_code=400, detail=f"Squad would exceed {SQUAD_LIMIT} players")
+    if squad_size < SQUAD_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your squad must have {SQUAD_LIMIT} players before confirming transfers (it would have {squad_size})",
+        )
 
     # Max transfers per GW (removals count; pure adds while the squad has room are free)
     if not is_wildcard and not is_free_hit:

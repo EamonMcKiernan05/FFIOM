@@ -290,6 +290,15 @@ function bankAfterPending() {
   if (!currentTeam) return 0;
   return Math.round(((currentTeam.budget_remaining ?? currentTeam.bank ?? 0) + pendingNet()) * 10) / 10;
 }
+/* Squad size after all pending ops are applied:
+   current players - removals (ops with an out) + additions (ops with an in).
+   Swaps net zero. */
+function squadSizeAfterPending() {
+  const base = T.layout.filter(Boolean).length;
+  const removals = T.pending.filter((p) => p.out).length;
+  const additions = T.pending.filter((p) => p.in).length;
+  return base - removals + additions;
+}
 /* Budget available for a new pick at a slot: bank + pending sells - pending buys
    (bankAfterPending), plus what the pick itself frees up.
    - pending op with a replacement: the new pick supersedes that buy -> add its price back
@@ -312,6 +321,8 @@ function renderTransfersPage() {
   const bank = bankAfterPending();
   const squadCount = T.layout.filter(Boolean).length;
   const netGain = pendingNet();
+  const postSize = squadSizeAfterPending();
+  const canConfirm = T.pending.length > 0 && postSize === 13;
 
   let html = `
     <div class="gw-banner">
@@ -332,9 +343,13 @@ function renderTransfersPage() {
         <h3 class="card__title" style="margin-bottom:0">Pending transfers</h3>
         <div style="display:flex;gap:0.8rem;flex-wrap:wrap">
           <button class="button button--text button--small" onclick="tfClearAll()">Clear all</button>
-          <button class="button button--accent button--small" onclick="tfConfirmAll()">Confirm all transfers</button>
+          <button class="button button--accent button--small" ${canConfirm ? '' : 'disabled'} onclick="tfConfirmAll()">Confirm all transfers</button>
         </div>
       </div>
+      ${postSize !== 13 ? `<p style="margin:0 0 1rem;font-size:1.4rem;color:var(--c-system-error)">
+        Your squad must have 13 players to confirm transfers — it would have ${postSize}.
+        ${postSize < 13 ? 'Add a player to each empty slot (or remove a pending removal).' : 'Remove a pending addition.'}
+      </p>` : ''}
       ${T.pending.map((p) => tfPendingRowHtml(p)).join('')}
     </div>`;
   }
@@ -469,6 +484,10 @@ function tfClearAll() {
 
 function tfConfirmAll() {
   if (!T.pending.length) return;
+  if (squadSizeAfterPending() !== 13) {
+    showToast('Your squad must have 13 players before confirming transfers', 'error');
+    return;
+  }
   const rows = T.pending.map((p) => {
     const out = p.out ? escapeHtml(p.out.name) : 'Empty slot';
     const inn = p.in ? escapeHtml(p.in.name) : 'No replacement';
@@ -502,6 +521,11 @@ function tfConfirmAll() {
 
 async function tfConfirmAllExecute() {
   if (!T.pending.length) return;
+  if (squadSizeAfterPending() !== 13) {
+    closeModal();
+    showToast('Your squad must have 13 players before confirming transfers', 'error');
+    return;
+  }
   const ops = T.pending.map((p) => ({
     player_out_id: p.out ? p.out.player_id : null,
     player_in_id: p.in ? p.in.player_id : null,
