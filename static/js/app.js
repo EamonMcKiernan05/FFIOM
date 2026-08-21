@@ -119,7 +119,7 @@ async function handleRegister(e) {
     const response = await fetch(`${API_BASE}/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password, team_name }),
+      body: JSON.stringify({ username, email, password, team_name: teamName }),
       credentials: 'include',
     });
     if (!response.ok) {
