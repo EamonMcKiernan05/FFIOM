@@ -11,7 +11,10 @@ FPL-style fantasy football for the Isle of Man football leagues (Canada Life Pre
 - Performance-adjusted player pricing and price-change engine
 - Squad tracking, transfer history, gameweek recaps, H2H and mini-leagues
 - 26/27 season: updated league/division config, squad transfer tracking with gameweek-bound transfers and top-ups
-- Vanilla-JS SPA (CSS token system, 14 page templates) + iOS app ([FFIOM-IOS-App](https://github.com/EamonMcKiernan05/FFIOM-IOS-App))
+- Transfers page: all 13 slots on a 5-5-3 pitch, player-market modal (filter by club / max price / affordability), pending-op batching with a review-and-confirm dialog; `/transfers/confirm` takes mixed batches with atomic validation, and confirms are rejected unless the post-transfer squad is exactly 13
+- `scripts/fulltime_sync.py` keeps the reference DB in step with FA FullTime: results onto matching fixtures, season stats from the statLeaders HTML, and each player's current club detected from match lineups (there is no transfer window in this league — moves are only visible in lineups)
+- New users start with a default 13-player squad
+- Vanilla-JS SPA (CSS token system, 13 page templates) + iOS app ([FFIOM-IOS-App](https://github.com/EamonMcKiernan05/FFIOM-IOS-App))
 
 ## Architecture
 
@@ -42,7 +45,7 @@ FullTimeAPI/          .NET 9 scraper + fa_proxy.py (TLS-impersonation proxy)
 static/               Vanilla-JS SPA frontend (pages, css tokens, js)
 alembic/              Database migrations
 docker/s6/            s6-overlay service definitions (api, faproxy, fulltime)
-scripts/              fetch-and-score.py, gen_pages.py, import_season_players.py
+scripts/              fetch-and-score.py, fulltime_sync.py, gen_pages.py, import_season_players.py
 tests/                Pytest suite (production DB isolation)
 Dockerfile            Multi-stage build: .NET SDK → aspnet:9.0 + python venv + s6-overlay
 compose.yaml          Production compose (host .env + bind-mounted DBs)
@@ -120,3 +123,5 @@ python run.py               # uvicorn reload on :8000 — dev only
 - `run.py` uses uvicorn `reload=True` — the container does NOT use it; s6 runs uvicorn directly without reload.
 - The game DB has `PRAGMA foreign_keys` deliberately OFF (players live in the separate FFIOM-DB; see `app/database.py`).
 - Security audit 2026-07-25 hardened auth (JWT-only, hashed + rotated refresh tokens, rate limits, admin gating, IDOR fixes).
+- Code review 2026-08-22 fixed C1–C8 critical findings: admin gating on gameweek / leaderboard / fixture / player / price mutators, H2H identity from token with invite-code joins, history-derived season totals (no double-count), shared free-transfer helper, delegated DOM event handlers replacing inline onclick interpolation, token-scope IDOR fixes with email stripped from public profiles, and a default 13-player squad on registration.
+- `scripts/fulltime_sync.py` backs up the DB to `<db>.pre_fulltime_sync_<ts>` before any write (`--dry-run` skips).
