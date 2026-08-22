@@ -6,6 +6,7 @@ import json
 from typing import Optional
 
 from app.database import get_bound_db, get_current_season
+from app.auth import require_admin
 from app.models import (
     Gameweek, Fixture, Player, SquadPlayer, FantasyTeam,
     FantasyTeamHistory, PlayerGameweekPoints, User, Season,
@@ -190,6 +191,7 @@ def create_gameweek(
     season: str = "2025-26",
     days_until_deadline: int = 3,
     db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
 ):
     """Create a new gameweek."""
     existing = db.query(Gameweek).filter(
@@ -214,7 +216,11 @@ def create_gameweek(
 
 
 @router.post("/{gw_id}/simulate-results")
-def simulate_results(gw_id: int, db: Session = Depends(get_bound_db)):
+def simulate_results(
+    gw_id: int,
+    db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
+):
     """Simulate fixture results (random scores for testing).
 
     Generates realistic scorelines based on team strengths.
@@ -255,7 +261,11 @@ def simulate_results(gw_id: int, db: Session = Depends(get_bound_db)):
 
 
 @router.post("/{gw_id}/close")
-def close_gameweek(gw_id: int, db: Session = Depends(get_bound_db)):
+def close_gameweek(
+    gw_id: int,
+    db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
+):
     """Close a gameweek (mark deadline as passed)."""
     gw = db.query(Gameweek).filter(Gameweek.id == gw_id).first()
     if not gw:
@@ -271,7 +281,11 @@ def close_gameweek(gw_id: int, db: Session = Depends(get_bound_db)):
 
 
 @router.post("/{gw_id}/score")
-def score_gameweek(gw_id: int, db: Session = Depends(get_bound_db)):
+def score_gameweek(
+    gw_id: int,
+    db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
+):
     """Score a gameweek - calculate points for all fantasy teams.
 
     Scoring:
@@ -319,7 +333,11 @@ def score_gameweek(gw_id: int, db: Session = Depends(get_bound_db)):
 
 
 @router.post("/{gw_id}/update-scores")
-def update_gameweek_scores(gw_id: int, db: Session = Depends(get_bound_db)):
+def update_gameweek_scores(
+    gw_id: int,
+    db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
+):
     """Update scores for a gameweek without requiring it to be closed.
 
     This is used for live scoring when fixture results come in before
@@ -791,6 +809,7 @@ def _update_rollover_transfers(gw, db):
 def simulate_and_score(
     gw_id: int,
     db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
 ):
     """Convenience endpoint: simulate results, close, calculate bonus, then score.
 
@@ -936,7 +955,7 @@ def calculate_dream_team(gw_id: int, db: Session) -> dict:
 
 
 @router.post("/sync")
-def sync_gameweek_fixtures():
+def sync_gameweek_fixtures(admin: object = Depends(require_admin)):
     """Sync fixtures from FullTime API and update scores.
 
     Fetches the latest fixture results from the FullTime API for all

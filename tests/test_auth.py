@@ -112,7 +112,7 @@ class TestRegistration:
         response = auth_client.post("/api/auth/register", json={
             "username": "newuser",
             "email": "newuser@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
             "team_name": "My Test Team",
         })
         assert response.status_code == 200
@@ -131,12 +131,12 @@ class TestRegistration:
         auth_client.post("/api/auth/register", json={
             "username": "user1",
             "email": "test@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         response = auth_client.post("/api/auth/register", json={
             "username": "user2",
             "email": "test@test.com",  # Same email
-            "password": "password456",
+            "password": "Passw0rdSecure!",
         })
         assert response.status_code == 400
         assert "email" in response.json()["detail"].lower() or "already" in response.json()["detail"].lower()
@@ -146,12 +146,12 @@ class TestRegistration:
         auth_client.post("/api/auth/register", json={
             "username": "uniqueuser",
             "email": "unique1@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         response = auth_client.post("/api/auth/register", json={
             "username": "uniqueuser",  # Same username
             "email": "unique2@test.com",
-            "password": "password456",
+            "password": "Passw0rdSecure!",
         })
         assert response.status_code == 400
 
@@ -169,7 +169,7 @@ class TestRegistration:
         auth_client.post("/api/auth/register", json={
             "username": "identity_user",
             "email": "identity@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         user = db_session.query(User).filter(User.email == "identity@test.com").first()
         assert user is not None
@@ -182,7 +182,7 @@ class TestRegistration:
         response = auth_client.post("/api/auth/register", json={
             "username": "team_user",
             "email": "team@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         data = response.json()
         assert "team" in data
@@ -201,11 +201,11 @@ class TestLogin:
         auth_client.post("/api/auth/register", json={
             "username": "loginuser",
             "email": "login@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         response = auth_client.post("/api/auth/login", json={
             "username": "loginuser",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         assert response.status_code == 200
         data = response.json()
@@ -218,11 +218,11 @@ class TestLogin:
         auth_client.post("/api/auth/register", json={
             "username": "emailuser",
             "email": "email@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         response = auth_client.post("/api/auth/login", json={
             "username": "email@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         assert response.status_code == 200
 
@@ -231,7 +231,7 @@ class TestLogin:
         auth_client.post("/api/auth/register", json={
             "username": "wrongpass",
             "email": "wrongpass@test.com",
-            "password": "correct123",
+            "password": "Str0ngPass!correct1",
         })
         response = auth_client.post("/api/auth/login", json={
             "username": "wrongpass",
@@ -243,23 +243,29 @@ class TestLogin:
         """Login for nonexistent user should fail."""
         response = auth_client.post("/api/auth/login", json={
             "username": "nonexistent",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         assert response.status_code == 401
 
-    def test_login_form_data(self, auth_client):
-        """Legacy form-based login should still work."""
+    def test_login_json_content_type(self, auth_client):
+        """JSON login should work (legacy form-login endpoint was removed as H4)."""
         auth_client.post("/api/auth/register", json={
             "username": "formuser",
             "email": "form@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
-        response = auth_client.post("/api/auth/login-form", data={
+        response = auth_client.post("/api/auth/login", json={
             "username": "formuser",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         })
         assert response.status_code == 200
         assert "access_token" in response.json()
+
+    def test_legacy_login_form_removed(self, auth_client):
+        """Legacy form-login endpoints must stay removed (July audit H4)."""
+        for path in ("/api/auth/login-form", "/api/users/login"):
+            r = auth_client.post(path, data={"username": "x", "password": "y"})
+            assert r.status_code in (401, 404, 405), f"{path} unexpectedly alive: {r.status_code}"
 
 
 # ============================================================
@@ -274,7 +280,7 @@ class TestTokenRefresh:
         reg = auth_client.post("/api/auth/register", json={
             "username": "refreshuser",
             "email": "refresh@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         }).json()
         old_refresh = reg["refresh_token"]
 
@@ -292,7 +298,7 @@ class TestTokenRefresh:
         reg = auth_client.post("/api/auth/register", json={
             "username": "revokeduser",
             "email": "revoked@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         }).json()
         old_refresh = reg["refresh_token"]
 
@@ -323,7 +329,7 @@ class TestLogout:
         reg = auth_client.post("/api/auth/register", json={
             "username": "logoutuser",
             "email": "logout@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         }).json()
         access_token = reg["access_token"]
         refresh_token = reg["refresh_token"]
@@ -428,23 +434,23 @@ class TestEmailVerification:
         reg = auth_client.post("/api/auth/register", json={
             "username": "verifyuser",
             "email": "verify@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         }).json()
         access_token = reg["access_token"]
 
-        response = auth_client.post("/api/auth/verify-email/request", headers={
+        response = auth_client.post("/api/auth/verify-email", headers={
             "Authorization": f"Bearer {access_token}",
         })
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "verification_requested"
+        assert data["status"] == "verification_sent"
 
     def test_verify_already_verified(self, auth_client, db_session):
         """Requesting verification for already verified user should be no-op."""
         reg = auth_client.post("/api/auth/register", json={
             "username": "alreadyverified",
             "email": "already@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         }).json()
         access_token = reg["access_token"]
 
@@ -453,7 +459,7 @@ class TestEmailVerification:
         user.email_verified = True
         db_session.commit()
 
-        response = auth_client.post("/api/auth/verify-email/request", headers={
+        response = auth_client.post("/api/auth/verify-email", headers={
             "Authorization": f"Bearer {access_token}",
         })
         assert response.status_code == 200
@@ -472,7 +478,7 @@ class TestAccountManagement:
         reg = auth_client.post("/api/auth/register", json={
             "username": "accountuser",
             "email": "account@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
             "team_name": "Test Team",
         }).json()
         access_token = reg["access_token"]
@@ -491,7 +497,7 @@ class TestAccountManagement:
         reg = auth_client.post("/api/auth/register", json={
             "username": "nametest",
             "email": "nametest@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         }).json()
         access_token = reg["access_token"]
 
@@ -506,14 +512,14 @@ class TestAccountManagement:
         reg = auth_client.post("/api/auth/register", json={
             "username": "passtest",
             "email": "passtest@test.com",
-            "password": "oldpassword",
+            "password": "Str0ngPass!oldP",
         }).json()
         access_token = reg["access_token"]
         refresh_token = reg["refresh_token"]
 
         response = auth_client.post("/api/account/password", json={
-            "current_password": "oldpassword",
-            "new_password": "newpassword123",
+            "current_password": "Str0ngPass!oldP",
+            "new_password": "Str0ngPass!newP123",
         }, headers={"Authorization": f"Bearer {access_token}"})
         assert response.status_code == 200
 
@@ -524,7 +530,7 @@ class TestAccountManagement:
         # Login with new password should work
         response = auth_client.post("/api/auth/login", json={
             "username": "passtest",
-            "password": "newpassword123",
+            "password": "Str0ngPass!newP123",
         })
         assert response.status_code == 200
 
@@ -533,13 +539,13 @@ class TestAccountManagement:
         reg = auth_client.post("/api/auth/register", json={
             "username": "wrongcurrent",
             "email": "wrongcurrent@test.com",
-            "password": "correctpassword",
+            "password": "Str0ngPass!correctP",
         }).json()
         access_token = reg["access_token"]
 
         response = auth_client.post("/api/account/password", json={
-            "current_password": "wrongpassword",
-            "new_password": "newpassword123",
+            "current_password": "Str0ngPass!wrongP",
+            "new_password": "Str0ngPass!newP123",
         }, headers={"Authorization": f"Bearer {access_token}"})
         assert response.status_code == 400
 
@@ -573,14 +579,14 @@ class TestAccountManagement:
 
         # Link email+password
         response = auth_client.post("/api/account/identities/email/link", json={
-            "password": "newpassword123",
+            "password": "Str0ngPass!newP123",
         }, headers={"Authorization": f"Bearer {access_token}"})
         assert response.status_code == 200
 
         # Now login with email+password should work
         response = auth_client.post("/api/auth/login", json={
             "username": "googleonly@test.com",
-            "password": "newpassword123",
+            "password": "Str0ngPass!newP123",
         })
         assert response.status_code == 200
 
@@ -781,7 +787,7 @@ class TestSecurity:
         reg = auth_client.post("/api/auth/register", json={
             "username": "expirytest",
             "email": "expiry@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         }).json()
         access_token = reg["access_token"]
 
@@ -796,7 +802,7 @@ class TestSecurity:
         reg = auth_client.post("/api/auth/register", json={
             "username": "hashtest",
             "email": "hashtest@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         }).json()
         raw_token = reg["refresh_token"]
 
@@ -816,7 +822,7 @@ class TestSecurity:
         reg = auth_client.post("/api/auth/register", json={
             "username": "prottest",
             "email": "prottest@test.com",
-            "password": "password123",
+            "password": "Passw0rdSecure!",
         }).json()
         access_token = reg["access_token"]
 

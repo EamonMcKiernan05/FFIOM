@@ -1,5 +1,6 @@
 """Player price change API routes - FPL 2025/26 compliant."""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.auth import require_admin
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
@@ -100,7 +101,8 @@ def get_price_leaders(
 @router.post("/process-price-changes", response_model=PriceChangeSummary)
 def process_price_changes(
     gameweek_id: int,
-    db: Session = Depends(get_bound_db)
+    db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
 ):
     """Process price changes based on transfer activity for a gameweek.
 

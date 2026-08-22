@@ -43,10 +43,9 @@ class TokenResponse(BaseModel):
 
 
 class UserResponse(BaseModel):
+    """Public user profile — deliberately excludes email (C7 fix)."""
     id: int
     username: str
-    email: str
-    email_verified: bool = False
     display_name: Optional[str] = None
     profile_picture_url: Optional[str] = None
     created_at: Optional[datetime] = None

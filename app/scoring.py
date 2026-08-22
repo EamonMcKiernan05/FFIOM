@@ -127,6 +127,21 @@ def calculate_player_points(
 
 
 
+def calculate_transfer_hit_for_team(ft, is_wildcard: bool = False, is_free_hit: bool = False) -> int:
+    """C5 fix: single source of truth for the -4 hit, based on team state.
+
+    The hit applies to transfers made this GW beyond the free transfers that
+    were available at the start of the GW (ft.free_transfers is decremented
+    per transfer by the routes, so the overshoot is current_gw_transfers
+    beyond free_transfers).
+    """
+    if is_wildcard or is_free_hit:
+        return 0
+    # C5 fix: free_transfers goes negative once the pool is exhausted, so the
+    # owed hit is exactly the number of over-pool transfers * TRANSFER_HIT.
+    return max(0, -min(0, ft.free_transfers)) * TRANSFER_HIT
+
+
 def calculate_transfer_hit(
     transfers_made: int,
     free_transfers_available: int,

@@ -177,7 +177,8 @@ def get_upcoming_deadlines(
 
     deadlines = []
     for gw in upcoming:
-        time_remaining = gw.deadline - now if gw.deadline else None
+        gw_deadline = gw.deadline.replace(tzinfo=timezone.utc) if gw.deadline and gw.deadline.tzinfo is None else gw.deadline
+        time_remaining = gw_deadline - now if gw_deadline else None
         deadlines.append({
             "gameweek_id": gw.id,
             "gameweek_number": gw.number,

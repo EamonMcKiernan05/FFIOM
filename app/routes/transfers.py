@@ -15,6 +15,7 @@ from app.models import (
 from app.schemas import TransferRequest
 from app.scoring import (
     calculate_transfer_hit,
+    calculate_transfer_hit_for_team,
     calculate_free_transfers,
     calculate_selling_price,
     MAX_TRANSFERS_PER_GW,
@@ -92,6 +93,14 @@ def transfer_player(
     squad = db.query(SquadPlayer).filter(SquadPlayer.fantasy_team_id == ft.id).all()
     squad_len = len(squad)
 
+    # C8 fix: enforce max-transfers-per-GW on this path too
+    if not is_wildcard and not is_free_hit:
+        if ft.current_gw_transfers >= MAX_TRANSFERS_PER_GW:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Max {MAX_TRANSFERS_PER_GW} transfers per gameweek. Use Wildcard or Free Hit for unlimited.",
+            )
+
     # --- Drop only ---
     if player_out_id and not player_in_id:
         sp = next((s for s in squad if s.player_id == player_out_id), None)
@@ -99,11 +108,18 @@ def transfer_player(
             raise HTTPException(status_code=404, detail="Player not in squad")
         sell_price = calculate_selling_price(sp.purchase_price, sp.player.price)
         ft.budget_remaining = round(ft.budget_remaining + sell_price, 1)
+        # C5/C8 fix: drops consume a free transfer / accrue a hit like swaps
+        points_hit = 0
+        if not is_wildcard and not is_free_hit:
+            ft.free_transfers -= 1
+            ft.current_gw_transfers += 1
+            points_hit = calculate_transfer_hit_for_team(ft, is_wildcard, is_free_hit)
         db.delete(sp)
         db.commit()
         return {
             "status": "dropped",
             "player_out": {"id": sp.player_id, "name": sp.player.name, "sold_for": sell_price},
+            "points_hit": points_hit,
             "budget_remaining": round(ft.budget_remaining, 1),
         }
 
@@ -145,15 +161,18 @@ def transfer_player(
         db.add(new_sp)
         ft.budget_remaining = round(ft.budget_remaining - player_in.price, 1)
 
-        # Count as transfer only if squad was already full (13 players)
-        is_wildcard_add = ft.active_chip == "wildcard"
-        is_free_hit_add = ft.active_chip == "free_hit"
-        if squad_len + 1 == SQUAD_LIMIT and not is_wildcard_add and not is_free_hit_add:
-            pass
-        elif squad_len >= SQUAD_LIMIT:
+        # C8 fix: pure adds while the squad has room are free picks (same
+        # semantics as /confirm). The old branch here was unreachable dead
+        # code that let users fill their whole squad without ever consuming
+        # a transfer; adds beyond a full squad are rejected above.
+        if not is_wildcard and not is_free_hit:
+            if ft.current_gw_transfers >= MAX_TRANSFERS_PER_GW:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Max {MAX_TRANSFERS_PER_GW} transfers per gameweek",
+                )
+            ft.free_transfers -= 1
             ft.current_gw_transfers += 1
-            if ft.free_transfers > 0:
-                ft.free_transfers -= 1
 
         db.commit()
         return {
@@ -196,7 +215,10 @@ def transfer_player(
     # Transfer cost: consume free transfer or track for scoring hit
     points_hit = 0
     if not is_wildcard and not is_free_hit:
+        # C5 fix: pool goes negative when exhausted; hit derives from that.
         ft.free_transfers -= 1
+        ft.current_gw_transfers += 1
+        points_hit = calculate_transfer_hit_for_team(ft, is_wildcard, is_free_hit)
 
     # Carry over slot/captaincy
     new_sp = SquadPlayer(
@@ -215,7 +237,7 @@ def transfer_player(
     db.delete(sp_out)
 
     ft.budget_remaining = budget_after
-    ft.current_gw_transfers += 1
+    # (current_gw_transfers already incremented in the cost block above)
 
     transfer_record = Transfer(
         user_id=ft.user_id,
@@ -331,21 +353,26 @@ def confirm_transfers(
             )
 
     # Club limit, budget and free-transfer count.
-    # Free transfers are consumed by ops that remove a player (swaps and
-    # removals); pure adds while the squad has room are free picks, matching
-    # the single-transfer endpoint's behaviour.
+    # C8 fix: validate against a WORKING SET that reflects earlier ops in the
+    # batch, so two swaps can't jointly breach the 3-per-club limit.
+    working_club_counts = {}
+    for sp in squad:
+        tid = sp.player.team_id
+        working_club_counts[tid] = working_club_counts.get(tid, 0) + 1
+
     free_transfers_before = ft.free_transfers
     free_transfers_after = free_transfers_before
     budget_change = 0
     for t in ops:
+        out_id = t["sp_out"].player_id if t["sp_out"] else None
+        if out_id is not None and t["sp_out"]:
+            tid = t["sp_out"].player.team_id
+            working_club_counts[tid] = max(0, working_club_counts.get(tid, 0) - 1)
         if t["player_in"]:
-            same_team = sum(
-                1 for s in squad
-                if s.player.team_id == t["player_in"].team_id
-                and s.player_id != (t["sp_out"].player_id if t["sp_out"] else -1)
-            )
-            if same_team >= MAX_PER_CLUB:
+            tid = t["player_in"].team_id
+            if working_club_counts.get(tid, 0) >= MAX_PER_CLUB:
                 raise HTTPException(status_code=400, detail=f"Already have {MAX_PER_CLUB} players from {t['player_in'].team.name}")
+            working_club_counts[tid] = working_club_counts.get(tid, 0) + 1
         if t["sp_out"]:
             budget_change += calculate_selling_price(t["sp_out"].purchase_price, t["sp_out"].player.price)
         if t["player_in"]:
@@ -420,11 +447,9 @@ def confirm_transfers(
         ft.free_transfers = free_transfers_after
     ft.current_gw_transfers += removals_in_batch
 
-    # Calculate point hits for display. Free transfers are only consumed by
-    # removals (swaps and drops); pure adds while the squad has room are free.
+    # C5 fix: derive the owed hit from the (possibly negative) free pool
     if not is_wildcard and not is_free_hit:
-        extra = max(0, removals_in_batch - free_transfers_before)
-        points_hit = extra * 4
+        points_hit = calculate_transfer_hit_for_team(ft, is_wildcard, is_free_hit)
     else:
         points_hit = 0
 
@@ -546,8 +571,10 @@ def make_transfer(
 
     points_hit = 0
     if not is_wildcard and not is_free_hit:
+        # C5 fix: pool goes negative when exhausted; hit derives from that.
         ft.free_transfers -= 1
         ft.current_gw_transfers += 1
+        points_hit = calculate_transfer_hit_for_team(ft, is_wildcard, is_free_hit)
 
     # Create new squad player
     new_sp = SquadPlayer(

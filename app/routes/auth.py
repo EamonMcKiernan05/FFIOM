@@ -1,3 +1,4 @@
+import logging
 """Authentication API routes for Fantasy Football IOM.
 
 Security fixes applied:
@@ -22,7 +23,8 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_bound_db, get_current_season
-from app.models import User, RefreshToken
+from app.utils.squad import create_default_squad
+from app.models import User, RefreshToken, Player
 from app.schemas import (
     UserCreate, LoginRequest, RefreshRequest, TokenResponse, UserResponse,
 )
@@ -31,6 +33,7 @@ from app.auth import (
     create_refresh_token,
     verify_refresh_token,
     revoke_refresh_token,
+    revoke_all_user_tokens,
     get_current_user_from_token,
     SECRET_KEY,
 )
@@ -93,7 +96,7 @@ def _verify_cookie(cookie_value: str) -> Optional[str]:
 
 # --- Registration ---
 
-@router.post("/register", response_model=TokenResponse)
+@router.post("/register", response_model=dict)
 def register(
     user_data: UserCreate,
     request: Request,
@@ -135,6 +138,19 @@ def register(
         free_transfers_next_gw=1,
     )
     db.add(ft)
+    db.flush()
+
+    # C8 fix: give new users a default 13-player squad so they start with a
+    # legal squad instead of an empty one.
+    try:
+        players = db.query(Player).filter(Player.is_active == True).all()
+        if players:
+            create_default_squad(ft, players, db)
+            db.flush()
+    except Exception as exc:
+        db.rollback()
+        logger.warning("Default squad creation failed for user %s: %s", new_user.id, exc)
+
     db.commit()
 
     access_token = create_access_token(new_user.id, new_user.username)
@@ -155,15 +171,32 @@ def register(
         path="/api/auth",
     )
 
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    team_payload = {
+        "id": ft.id,
+        "name": ft.name,
+        "budget": ft.budget,
+        "budget_remaining": ft.budget_remaining,
+        "season": ft.season,
+    }
+
+    return {
+        **TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+        ).model_dump(),
+        "user": {
+            "id": new_user.id,
+            "username": new_user.username,
+            "email": new_user.email,
+            "email_verified": new_user.email_verified,
+        },
+        "team": team_payload,
+    }
 
 
 # --- Login ---
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=dict)
 def login(
     credentials: LoginRequest,
     request: Request,
@@ -199,10 +232,18 @@ def login(
         path="/api/auth",
     )
 
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-    )
+    return {
+        **TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+        ).model_dump(),
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "email_verified": user.email_verified,
+        },
+    }
 
 
 # --- Token refresh ---
@@ -275,15 +316,18 @@ def refresh_token(
 def logout(
     request: Request,
     response: Response,
+    user: User = Depends(get_current_user_from_token),
     db: Session = Depends(get_bound_db),
 ):
-    """Logout: revoke the refresh token."""
+    """Logout: revoke the presented refresh token and all of the user's tokens."""
     cookie_token = request.cookies.get("refresh_token")
     if cookie_token:
         revoke_refresh_token(cookie_token, db=db)
 
+    revoked = revoke_all_user_tokens(user.id, db=db)
+
     response.delete_cookie(key="refresh_token", path="/api/auth")
-    return {"status": "logged_out"}
+    return {"status": "logged_out", "revoked_tokens": revoked}
 
 
 # --- Google OAuth ---
@@ -518,3 +562,5 @@ def verify_email(
 def get_me(user: User = Depends(get_current_user_from_token)):
     """Get the current authenticated user's profile."""
     return user
+
+logger = logging.getLogger(__name__)

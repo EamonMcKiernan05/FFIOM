@@ -16,6 +16,7 @@ from apscheduler.triggers.date import DateTrigger
 from datetime import datetime, timedelta
 
 from app.database import init_binds
+from sqlalchemy import func
 from app.models import (
     Gameweek, Season, Player, PlayerGameweekPoints,
     FantasyTeam, SquadPlayer, FantasyTeamHistory, Team, Fixture,
@@ -240,13 +241,17 @@ def _update_fixture_from_results(db, fixture, div_id, client):
         logger.error(f"Error fetching results for division {div_id}: {e}")
 
 
-def _score_updated_gameweek(db, gw_id: int):
+def _score_updated_gameweek(db, gw_id: int, mark_scored: bool = True):
     """Score a single gameweek that has new results.
 
     Generates player points for each played fixture and updates
     fantasy team totals and ranks.
+
+    C4 fix: totals are derived from the sum of FantasyTeamHistory rows and
+    per-GW history rows are upserted, so re-running scoring on the same GW
+    can never double-count season points.
     """
-    from app.scoring import calculate_player_points
+    from app.scoring import calculate_player_points, calculate_transfer_hit_for_team, calculate_transfer_hit_for_team, calculate_transfer_hit
     import random
 
     gw = db.query(Gameweek).filter(Gameweek.id == gw_id).first()
@@ -304,31 +309,50 @@ def _score_updated_gameweek(db, gw_id: int):
 
         is_wildcard = ft.active_chip == "wildcard"
         is_free_hit = ft.active_chip == "free_hit"
-        starting_free = ft.free_transfers + ft.current_gw_transfers
-        if ft.current_gw_transfers > 0 and not is_wildcard and not is_free_hit:
-            transfer_hit = max(0, ft.current_gw_transfers - starting_free) * 4
-        else:
-            transfer_hit = 0
-        total -= transfer_hit
-        ft.total_points += total
-
-        history = FantasyTeamHistory(
-            fantasy_team_id=ft.id,
-            gameweek_id=gw_id,
-            points=total,
-            total_points=ft.total_points,
-            chip_used=chip,
+        # C5 fix: hit computed BEFORE free_transfers were consumed this GW.
+        free_at_start = max(0, ft.free_transfers + ft.current_gw_transfers)
+        transfer_hit = calculate_transfer_hit(
             transfers_made=ft.current_gw_transfers,
-            transfers_cost=transfer_hit,
+            free_transfers_available=free_at_start,
+            is_wildcard=is_wildcard,
         )
-        db.add(history)
+        total -= transfer_hit
+
+        # C4 fix: upsert this GW's history row instead of always inserting one
+        existing_hist = db.query(FantasyTeamHistory).filter(
+            FantasyTeamHistory.fantasy_team_id == ft.id,
+            FantasyTeamHistory.gameweek_id == gw_id,
+        ).first()
+        if existing_hist:
+            existing_hist.points = total
+            existing_hist.chip_used = chip
+            existing_hist.transfers_made = ft.current_gw_transfers
+            existing_hist.transfers_cost = transfer_hit
+        else:
+            db.add(FantasyTeamHistory(
+                fantasy_team_id=ft.id,
+                gameweek_id=gw_id,
+                points=total,
+                chip_used=chip,
+                transfers_made=ft.current_gw_transfers,
+                transfers_cost=transfer_hit,
+            ))
+        db.flush()
+
+        # C4 fix: derive season total from history so it can never inflate
+        ft.total_points = (
+            db.query(func.coalesce(func.sum(FantasyTeamHistory.points), 0))
+            .filter(FantasyTeamHistory.fantasy_team_id == ft.id)
+            .scalar()
+        )
 
     # Update ranks
     all_teams = db.query(FantasyTeam).order_by(FantasyTeam.total_points.desc()).all()
     for rank, team in enumerate(all_teams, 1):
         team.overall_rank = rank
 
-    gw.scored = True
+    if mark_scored:
+        gw.scored = True
     gw.bonus_calculated = True
     db.commit()
     logger.info(f"Scored gameweek {gw.number} ({len(played_fixtures)} fixtures)")
@@ -378,7 +402,7 @@ def _score_walkover(db, gw, fixture):
 
 def _score_fixture(db, gw, fixture):
     """Score a normal fixture with results."""
-    from app.scoring import calculate_player_points
+    from app.scoring import calculate_player_points, calculate_transfer_hit_for_team, calculate_transfer_hit_for_team, calculate_transfer_hit
     import random
 
     for team_id, goals_scored, goals_conceded, is_home in [
@@ -600,11 +624,14 @@ def _score_gameweek_direct(db, gw_id: int):
 
         is_wildcard = ft.active_chip == "wildcard"
         is_free_hit = ft.active_chip == "free_hit"
-        starting_free = ft.free_transfers + ft.current_gw_transfers
-        if ft.current_gw_transfers > 0 and not is_wildcard and not is_free_hit:
-            transfer_hit = max(0, ft.current_gw_transfers - starting_free) * 4
-        else:
-            transfer_hit = 0
+        # C5 fix: hit computed against the free-transfer pool as it was at
+        # the START of the GW (before this GW's transfers consumed it).
+        starting_free = max(0, ft.free_transfers + ft.current_gw_transfers)
+        transfer_hit = (
+            max(0, ft.current_gw_transfers - starting_free) * 4
+            if not is_wildcard and not is_free_hit
+            else 0
+        )
         total -= transfer_hit
         ft.total_points += total
 
@@ -855,13 +882,26 @@ def sync_fixtures():
 
 
 def _score_updated_gameweeks_bulk(db):
-    """Score all gameweeks that have new results (bulk mode)."""
+    """Score all gameweeks that have new results (bulk mode).
+
+    C4 fix: skip gameweeks that are already fully scored so the daily sync
+    cannot re-add points to every team forever.
+    """
     gameweeks = db.query(Gameweek).all()
     for gw in gameweeks:
+        if gw.scored:
+            continue
+        all_fixtures = db.query(Fixture).filter(
+            Fixture.gameweek_id == gw.id,
+        ).count()
+        if all_fixtures == 0:
+            continue
         played_fixtures = db.query(Fixture).filter(
             Fixture.gameweek_id == gw.id,
             Fixture.played == True,
         ).all()
-
-        if played_fixtures:
+        # Only mark scored once every fixture in the GW has a result (H1)
+        if len(played_fixtures) < all_fixtures:
+            _score_updated_gameweek(db, gw.id, mark_scored=False)
+        else:
             _score_updated_gameweek(db, gw.id)

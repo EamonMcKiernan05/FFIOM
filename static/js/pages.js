@@ -154,17 +154,38 @@ async function renderMyTeam() {
   renderChips(chips);
 }
 
+/* C6 fix: keep a numeric-id-keyed registry of squad entries so event
+   handlers never need names interpolated into inline JS attributes. */
+const SQUAD_INDEX = {};
+
+function indexSquadEntry(s) {
+  if (s && s.id != null) SQUAD_INDEX[s.id] = s;
+}
+
+async function showSquadPlayerModalById(squadId, isStarting) {
+  const entry = SQUAD_INDEX[squadId];
+  const name = entry ? entry.name : 'Player';
+  await showSquadPlayerModal(squadId, name, isStarting);
+}
+
 function pitchPlayerHtml(s) {
+  indexSquadEntry(s);
   const badge = s.is_captain ? '<span class="pitch-player__c">C</span>'
     : s.is_vice_captain ? '<span class="pitch-player__vc">V</span>' : '';
   return `
-    <div class="pitch-player" onclick="showSquadPlayerModal(${s.id}, '${escapeHtml(s.name).replace(/'/g, "\\'")}', ${s.is_starting ? 'true' : 'false'})">
+    <div class="pitch-player" data-squad-id="${Number(s.id)}" data-starting="${s.is_starting ? '1' : '0'}">
       ${badge}
       <div class="pitch-player__shirt">${clubLogo(s.team_name || '', '')}</div>
       <div class="pitch-player__name">${escapeHtml(s.name)}</div>
       <div class="pitch-player__pts">${s.gw_points ?? 0} pts</div>
     </div>`;
 }
+/* Delegated listener replaces per-element inline handlers (C6 fix). */
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('.pitch-player[data-squad-id]');
+  if (!el) return;
+  showSquadPlayerModalById(Number(el.dataset.squadId), el.dataset.starting === '1');
+});
 
 async function showSquadPlayerModal(squadId, name, isStarting) {
   openModal(`
@@ -202,16 +223,35 @@ function renderChips(chips) {
   const list = Array.isArray(chips) ? chips : (chips.chips || []);
   if (!list.length) { row.innerHTML = ''; return; }
   const label = (t) => String(t).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const KNOWN_CHIPS = ['wildcard', 'free_hit', 'bench_boost', 'triple_captain'];
   row.innerHTML = list.map((c) => {
-    const type = c.type || c.chip_type || c.name;
+    let type = c.type || c.chip_type || c.name;
+    /* C6 fix: never interpolate server strings into inline JS. Unknown chip
+       types render as disabled placeholders instead of being passed through. */
+    const safeType = KNOWN_CHIPS.includes(type) ? type : null;
     const isActive = !!(c.active ?? c.is_active);
     const used = !!c.used;
+    if (!safeType) {
+      return `
+    <button class="chip-button" disabled>
+      ${escapeHtml(label(type))}${used ? ' (used)' : ''}
+    </button>`;
+    }
     return `
     <button class="chip-button ${isActive ? 'is-active' : ''}" ${used && !isActive ? 'disabled' : ''}
-      onclick="toggleChip('${type}', ${isActive})">
+      data-chip="${safeType}" data-active="${isActive ? '1' : '0'}">
       ${escapeHtml(label(type))}${used ? ' (used)' : ''}
     </button>`;
   }).join('');
+  /* Delegated chip handler (C6 fix) — avoid stacking duplicate listeners */
+  if (!row.dataset.chipDelegated) {
+    row.dataset.chipDelegated = '1';
+    row.addEventListener('click', (e) => {
+      const btn = e.target.closest('button.chip-button[data-chip]');
+      if (!btn || btn.disabled) return;
+      toggleChip(btn.dataset.chip, btn.dataset.active === '1');
+    });
+  }
 }
 
 async function toggleChip(chipType, isActive) {

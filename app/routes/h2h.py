@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Optional, List
 
 from app.database import get_db, get_bound_db, get_current_season
+from app.auth import get_current_user_from_token
 from app.models import (
     H2hLeague, H2hParticipant, H2hMatch, FantasyTeam, User, Gameweek,
 )
@@ -102,10 +103,18 @@ def create_h2h_league(
     name: str,
     is_public: bool = True,
     format_type: str = "round_robin",
-    user_id: int = None,
+    user: User = Depends(get_current_user_from_token),
     db: Session = Depends(get_bound_db),
 ):
-    """Create a new H2H league."""
+    """Create a new H2H league (admin is the authenticated user)."""
+    ft = (
+        db.query(FantasyTeam)
+        .filter(FantasyTeam.user_id == user.id)
+        .first()
+    )
+    if not ft:
+        raise HTTPException(status_code=404, detail="Fantasy team not found")
+
     import secrets
     code = secrets.token_hex(4).upper()
 
@@ -113,13 +122,27 @@ def create_h2h_league(
         name=name,
         season=get_current_season(db),
         format_type=format_type,
-        admin_user_id=user_id or 1,
+        admin_user_id=user.id,
         invite_code=code,
         created_at=datetime.utcnow(),
     )
     db.add(league)
     db.commit()
     db.refresh(league)
+
+    # Creator automatically joins as first participant
+    participant = H2hParticipant(
+        h2h_league_id=league.id,
+        fantasy_team_id=ft.id,
+        h2h_points=0,
+        wins=0,
+        draws=0,
+        losses=0,
+        byes=0,
+        goal_difference=0,
+    )
+    db.add(participant)
+    db.commit()
 
     return {
         "league_id": league.id,
@@ -132,18 +155,55 @@ def create_h2h_league(
 @router.post("/leagues/{league_id}/join")
 def join_h2h_league(
     league_id: int,
-    user_id: Optional[int] = Query(None),
+    code: Optional[str] = Query(None),
+    user: User = Depends(get_current_user_from_token),
     db: Session = Depends(get_bound_db),
 ):
-    """Join H2H league with code."""
+    """Join an H2H league using its invite code."""
     league = db.query(H2hLeague).filter(H2hLeague.id == league_id).first()
     if not league:
         raise HTTPException(status_code=404, detail="H2H league not found")
+
+    if not code or code.strip().upper() != (league.invite_code or "").strip().upper():
+        raise HTTPException(status_code=403, detail="Invalid invite code")
+
+    ft = (
+        db.query(FantasyTeam)
+        .filter(FantasyTeam.user_id == user.id)
+        .first()
+    )
+    if not ft:
+        raise HTTPException(status_code=404, detail="Fantasy team not found")
+
+    existing = (
+        db.query(H2hParticipant)
+        .filter(
+            H2hParticipant.h2h_league_id == league_id,
+            H2hParticipant.fantasy_team_id == ft.id,
+        )
+        .first()
+    )
+    if existing:
+        return {"status": "already_joined", "league_id": league.id, "name": league.name}
+
+    participant = H2hParticipant(
+        h2h_league_id=league_id,
+        fantasy_team_id=ft.id,
+        h2h_points=0,
+        wins=0,
+        draws=0,
+        losses=0,
+        byes=0,
+        goal_difference=0,
+    )
+    db.add(participant)
+    db.commit()
 
     return {
         "status": "joined",
         "league_id": league.id,
         "name": league.name,
+        "participant_id": participant.id,
     }
 
 
@@ -228,12 +288,16 @@ def get_h2h_fixtures(
 @router.post("/leagues/{league_id}/generate-fixtures")
 def generate_h2h_fixtures(
     league_id: int,
+    user: User = Depends(get_current_user_from_token),
     db: Session = Depends(get_bound_db),
 ):
-    """Generate round-robin fixtures for H2H league."""
+    """Generate round-robin fixtures for H2H league (league admin only)."""
     league = db.query(H2hLeague).filter(H2hLeague.id == league_id).first()
     if not league:
         raise HTTPException(status_code=404, detail="H2H league not found")
+
+    if league.admin_user_id != user.id and not getattr(user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Only the league admin can generate fixtures")
 
     participants = (
         db.query(H2hParticipant)
@@ -314,21 +378,18 @@ def generate_h2h_fixtures(
 @router.get("/leagues/{league_id}/my-matches")
 def get_my_h2h_matches(
     league_id: int,
-    user_id: Optional[int] = Query(None),
+    user: User = Depends(get_current_user_from_token),
     db: Session = Depends(get_bound_db),
 ):
-    """Get current user's H2H matches."""
+    """Get the authenticated user's H2H matches in this league."""
     league = db.query(H2hLeague).filter(H2hLeague.id == league_id).first()
     if not league:
         raise HTTPException(status_code=404, detail="H2H league not found")
 
-    if not user_id:
-        raise HTTPException(status_code=400, detail="user_id required")
-
     # Find user's participant
     ft = (
         db.query(FantasyTeam)
-        .filter(FantasyTeam.user_id == user_id)
+        .filter(FantasyTeam.user_id == user.id)
         .first()
     )
     if not ft:

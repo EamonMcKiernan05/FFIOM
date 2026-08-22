@@ -26,6 +26,15 @@ def test_db():
     os.unlink(temp_db.name)
 
 
+@pytest.fixture(autouse=True)
+def _reset_auth_rate_limit():
+    """Clear the in-memory auth rate-limit store between tests (module-global state)."""
+    from app.routes import auth as auth_routes
+    auth_routes._rate_limit_store.clear()
+    yield
+    auth_routes._rate_limit_store.clear()
+
+
 @pytest.fixture(scope="function")
 def client(test_db):
     """Create a test client for API testing.

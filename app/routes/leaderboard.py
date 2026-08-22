@@ -1,5 +1,6 @@
 """Leaderboard API routes - FPL style."""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.auth import require_admin
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
@@ -230,7 +231,10 @@ def get_user_history(user_id: int, db: Session = Depends(get_bound_db)):
 
 
 @router.post("/calculate-ranks")
-def calculate_all_ranks(db: Session = Depends(get_bound_db)):
+def calculate_all_ranks(
+    db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
+):
     """Recalculate overall ranks for all teams.
 
     Called after scoring to update ranks.

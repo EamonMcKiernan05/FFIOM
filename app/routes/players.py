@@ -1,5 +1,6 @@
 """Player browsing API routes."""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.auth import require_admin
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
@@ -359,7 +360,10 @@ def get_player_history(player_id: int, db: Session = Depends(get_bound_db)):
 
 
 @router.post("/sync")
-def sync_players(db: Session = Depends(get_bound_db)):
+def sync_players(
+    db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
+):
     """Sync players from manxfantasyfootball.com."""
     scraper = api_client.ManxFantasyFootballScraper()
     raw_players = scraper.scrape_all_leagues()

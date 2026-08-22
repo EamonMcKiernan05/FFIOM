@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 
 from app.database import get_bound_db
+from app.auth import get_current_user_from_token
 from app.models import (
     User, FantasyTeam, SquadPlayer, Player, Gameweek, Fixture,
     PlayerGameweekPoints, Team,
@@ -17,7 +18,11 @@ def get_captain_hints(
     user_id: int,
     gw_id: Optional[int] = Query(None, description="Gameweek ID to get hints for"),
     db: Session = Depends(get_bound_db),
+    user: User = Depends(get_current_user_from_token),
 ):
+    """Captain hints for the authenticated user's own squad (C7 fix)."""
+    if user_id != user.id and not getattr(user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Not your account")
     """Get captain hints based on form, fixtures, and player stats.
     
     FPL-style captain recommendation algorithm:
@@ -144,7 +149,11 @@ def compare_captain_options(
     user_id: int,
     player_ids: str = Query(..., description="Comma-separated player IDs to compare"),
     db: Session = Depends(get_bound_db),
+    user: User = Depends(get_current_user_from_token),
 ):
+    """Compare captain options for the authenticated user's own squad (C7 fix)."""
+    if user_id != user.id and not getattr(user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Not your account")
     """Compare multiple players as captain options side by side.
     
     Returns detailed comparison with:

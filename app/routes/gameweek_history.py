@@ -8,10 +8,11 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
 from typing import Optional
 
+from app.auth import get_current_user_from_token, User as AuthUser
 from app.database import get_bound_db
 from app.models import (
     FantasyTeam, Gameweek, FantasyTeamHistory, SquadPlayer, Player,
-    GameweekStats, Transfer, PlayerGameweekPoints,
+    GameweekStats, Transfer, PlayerGameweekPoints, User,
 )
 
 router = APIRouter(prefix="/api/gameweek-history", tags=["gameweek-history"])
@@ -67,9 +68,10 @@ def _alias_transfer_history(
     team_id: int,
     gameweek_id: Optional[int] = Query(None),
     db: Session = Depends(get_bound_db),
+    user: User = Depends(get_current_user_from_token),
 ):
     """Alias kept early for route-ordering: see get_transfer_history."""
-    return get_transfer_history(team_id, gameweek_id, db)
+    return get_transfer_history(team_id, gameweek_id, db, user=user)
 
 
 @router.get("/{team_id}/{gameweek_id}")
@@ -77,8 +79,9 @@ def get_gameweek_breakdown(
     team_id: int,
     gameweek_id: int,
     db: Session = Depends(get_bound_db),
+    user: User = Depends(get_current_user_from_token),
 ):
-    """Get detailed gameweek breakdown for a fantasy team.
+    """Get detailed gameweek breakdown for a fantasy team (owner only — C7 fix).
 
     FPL-style per-player points breakdown including:
     - Points from each player in starting XI
@@ -90,6 +93,8 @@ def get_gameweek_breakdown(
     ft = db.query(FantasyTeam).filter(FantasyTeam.id == team_id).first()
     if not ft:
         raise HTTPException(status_code=404, detail="Fantasy team not found")
+    if ft.user_id != user.id and not getattr(user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Not your fantasy team")
 
     gw = db.query(Gameweek).filter(Gameweek.id == gameweek_id).first()
     if not gw:
@@ -218,14 +223,17 @@ def get_transfer_history(
     team_id: int,
     gameweek_id: Optional[int] = Query(None),
     db: Session = Depends(get_bound_db),
+    user: User = Depends(get_current_user_from_token),
 ):
-    """Get transfer history for a fantasy team.
+    """Get transfer history for a fantasy team (owner only — C7 fix).
 
     FPL-style transfer history showing players in/out per gameweek.
     """
     ft = db.query(FantasyTeam).filter(FantasyTeam.id == team_id).first()
     if not ft:
         raise HTTPException(status_code=404, detail="Fantasy team not found")
+    if ft.user_id != user.id and not getattr(user, "is_admin", False):
+        raise HTTPException(status_code=403, detail="Not your fantasy team")
 
     user_id = ft.user_id
 

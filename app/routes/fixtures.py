@@ -1,5 +1,6 @@
 """Fixture management and difficulty API routes."""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from app.auth import require_admin
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime
@@ -111,7 +112,10 @@ def get_player_fixtures(
 
 
 @router.post("/calculate-difficulties")
-def calculate_fixture_difficulties(db: Session = Depends(get_bound_db)):
+def calculate_fixture_difficulties(
+    db: Session = Depends(get_bound_db),
+    admin: object = Depends(require_admin),
+):
     """Calculate fixture difficulty ratings based on team strength.
 
     FPL-style difficulty ratings (1=easiest, 5=hardest) based on team
